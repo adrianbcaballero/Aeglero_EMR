@@ -13,6 +13,9 @@ const LoginFormCard = ({ role, goBack }) => {
 
     const handleLogin = async () => {
       try {
+          console.log('VITE_API_BASE:', import.meta.env.VITE_API_BASE);
+          console.log('All env:', import.meta.env);
+          console.log('Full URL:', `${import.meta.env.VITE_API_BASE}/auth/login`);
           const response = await fetch(`${import.meta.env.VITE_API_BASE}/auth/login`, {
             method: "POST",
             headers: {
