@@ -1,174 +1,229 @@
-# Project Link: [https://easygoing-respect-frontend.up.railway.app/](https://easygoing-respect-frontend.up.railway.app/)
-# CPP Hackathon 2025 – Full Stack Project
+# Aeglero EMR - Mental Health Electronic Medical Records Platform
 
-This project is a Dockerized full-stack app using a **React frontend** and a **Flask backend**, designed for clean team collaboration and fast development.
+A HIPAA-compliant mental health EMR application designed to support clinical workflows for mental health advisors and their patients. Built with React and Flask.
 
 ---
 
-## 🔧 Requirements (for Docker users)
+## Overview
 
+Aeglero EMR is a full-stack healthcare application that enables mental health professionals to track patient wellness, monitor mood trends, and manage clinical documentation. The system emphasizes data security, regulatory compliance, and intuitive clinical workflows.
+
+---
+
+## Features
+
+### For Advisors (Clinicians)
+- **Patient Dashboard** — View all assigned patients with priority scoring
+- **Mood Trend Analysis** — Track patient wellness over time with visual graphs
+- **Search & Filter** — Find patients by name, date, or score value
+- **Patient Detail View** — Access complete mood history, journal entries, and calculated scores
+
+### For Patients (Students)
+- **Daily Mood Tracking** — Submit mood scores with visual indicators (color, emoji)
+- **Journal Entries** — Record thoughts categorized by type (Personal, Academic, Career, Social)
+- **Secure Login** — Role-based authentication with daily submission validation
+
+### Security & Compliance
+- **Role-Based Access Control** — Separate advisor and patient portals
+- **HIPAA-Aligned Design** — PHI handling, data security, confidentiality standards
+- **Audit Logging** — Track data modifications with timestamps
+- **Data Integrity** — Unique constraints prevent duplicate daily entries
+
+---
+
+## Screenshots
+
+### Advisor Dashboard
+![Advisor Dashboard](./docs/screenshots/dashboard_sample.png)
+*Clinician view showing high-priority patients, search functions, and mood trend graphs*
+
+### Patient Detail View
+![Patient Detail View](./docs/screenshots/single_patient_view.png)
+*Complete patient record with mood submissions, journal entries, and calculated score history*
+
+---
+
+## System Architecture
+
+```
+
+
+│  React Frontend │────▶│  Flask Backend  │────▶│  PostgreSQL DB  │
+│  (Vite + Nginx) │     │  (REST API)     │     │  (Railway)      │
+
+
+```
+
+### Tech Stack
+- **Frontend:** React 18, Vite, TailwindCSS
+- **Backend:** Python, Flask, SQLAlchemy
+- **Database:** PostgreSQL
+- **Deployment:** Docker, Railway
+- **Authentication:** Role-based (Advisor/Patient)
+
+---
+
+## Data Model
+
+```
+Advisors (1) ──────< Students (N)
+                         │
+                         ├──< MoodSubmissions (daily mood tracking)
+                         │
+                         ├──< FormSubmissions (journal entries)
+                         │
+                         └──< Scores (calculated daily scores)
+```
+
+### Key Entities
+
+| Entity | Description |
+|--------|-------------|
+| **Advisor** | Mental health professional managing multiple patients |
+| **Student** | Patient assigned to an advisor |
+| **MoodSubmission** | Daily mood entry (slider value, color, emoji) |
+| **FormSubmission** | Journal entry with category and text |
+| **Score** | Calculated daily wellness score |
+
+---
+
+## Security Features
+
+| Feature | Implementation |
+|---------|----------------|
+| Role-Based Access | Advisors and patients have separate authentication paths |
+| Daily Validation | Patients can only submit one mood entry per day |
+| Data Isolation | Advisors only see their assigned patients |
+| Audit Timestamps | All records include `created_at` timestamps |
+| Secure API | CORS configured, credentials supported |
+
+---
+
+## Getting Started
+
+### Prerequisites
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- No need to install Python, Node, or use virtual environments locally!
 
----
+### Quick Start
 
-## 🗂️ Project Structure
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/Aeglero_EMR.git
+   cd Aeglero_EMR
+   ```
 
-```
-cpp-hackathon-2025/
-│
-├── backend/         # Flask API
-│   ├── app.py
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── Dockerfile
-│
-├── frontend/        # React (Vite) App
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   └── Dockerfile
-│
-├── docker-compose.yml
-├── .gitignore
-└── .env.example     # Root .env for Docker Compose (optional)
-```
+2. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your database credentials
+   ```
 
----
+3. **Run with Docker**
+   ```bash
+   docker compose up --build
+   ```
 
-## 🚀 Running the Project with Docker (Production Build)
+4. **Access the application**
+   - Frontend: [http://localhost:3000](http://localhost:3000)
+   - Backend API: [http://localhost:5003](http://localhost:5003)
 
-From the root directory:
+### Development Mode (with hot reload)
 
 ```bash
-docker compose up --build
-```
-
-- Flask backend: [http://localhost:5003](http://localhost:5003)
-- React frontend (built + served by Nginx): [http://localhost:3000](http://localhost:3000)
-
-✅ Backend auto-reloads on code changes  
-⚠️ Frontend does **not** hot reload in this mode — use local dev mode below!
-
----
-
-## 🔥 Local Dev Mode with Live Reload (Recommended for Dev)
-
-### Full Workflow: Backend + Frontend Together
-
-1. **Start the backend in Docker** (Flask runs with hot reload):
-
-```bash
+#start backend
 docker compose up -d
-```
 
-🧼 Pro tip: Once a week, you can clean up unused containers/images to free up space:
-```bash
-docker system prune -f
-```
-
-2. **Start the frontend with Vite hot reload** (outside Docker):
-
-```bash
+#start frontend with live reload
 cd frontend
-npm install      # Only the first time
+npm install
 npm run dev
 ```
 
-> ✅ Open [http://localhost:5173](http://localhost:5173) to view the frontend  
-> ✅ API calls should go to `http://localhost:5003`
+---
 
-3. Edit code in:
-- `frontend/` → auto reloads in browser
-- `backend/` → Flask auto-restarts inside Docker (thanks to `FLASK_ENV=development`)
+## Project Structure
 
-4. **Stop everything when done**:
+```
+Aeglero_EMR/
+├── backend/
+│   ├── app.py              # Flask application entry point
+│   ├── models.py           # SQLAlchemy data models
+│   ├── auth.py             # Authentication routes
+│   ├── advisor_routes.py   # Advisor API endpoints
+│   ├── form_routes.py      # Form submission endpoints
+│   ├── mood_routes.py      # Mood tracking endpoints
+│   └── services/           # Business logic layer
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # Reusable UI components
+│   │   ├── pages/          # Page-level components
+│   │   └── styles/         # CSS stylesheets
+│   └── public/
+│
+├── docs/
+│   ├── screenshots/        # Application screenshots
+│   ├── REQUIREMENTS.md     # User requirements documentation
+│   └── SYSTEM_DESIGN.md    # Technical specifications
+│
+└── docker-compose.yml
+```
+
+---
+
+## API Endpoints
+
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/login` | User login (advisor or patient) |
+| POST | `/auth/create-student` | Register new patient |
+| POST | `/auth/create-advisor` | Register new advisor |
+
+### Patient Data
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/mood/submit` | Submit daily mood entry |
+| POST | `/form/submit` | Submit journal entry |
+| GET | `/advisor/students` | Get all assigned patients |
+| GET | `/advisor/student/<id>` | Get patient detail with history |
+
+---
+
+## Testing
 
 ```bash
-docker compose down
+#Run backend tests
+docker exec -it cpp-backend python -m pytest
+
+#Run performance tests
+cd backend/scripts/baseline
+python test_performance.py
 ```
+
+
+## Author
+
+**Adrian Caballero**
+- Portfolio: [aeglero.com](https://aeglero.com)
+- LinkedIn: [linkedin.com/in/adriancaballero](https://linkedin.com/in/abcaballero)
+- GitHub: [github.com/adriancaballero](https://github.com/adrianbcaballero)
 
 ---
 
-## ⚙️ Environment Variables
+## License
 
-1. Copy the example file:
-
-   ```bash
-   cp backend/.env.example backend/.env
-   ```
-
-2. (Optional) If using root-level `.env` with Docker Compose:
-
-   ```bash
-   cp .env.example .env
-   ```
+This project is for educational and portfolio purposes. All patient data shown in screenshots is simulated test data.
 
 ---
 
-## 🧪 Example: Test the Backend
+## HIPAA Compliance Note
 
-```bash
-curl http://localhost:5003/
-```
+This application was designed with HIPAA compliance principles in mind, including:
+- Role-based access control
+- Audit logging capabilities
+- Data integrity constraints
+- Secure authentication
+- PHI handling best practices
 
-Expected output:
-
-```json
-{ "message": "Hello from Flask backend!" }
-```
-
----
-
-## 🧱 Adding Python Packages
-
-```bash
-docker exec -it cpp-backend pip install <package>
-docker exec cpp-backend pip freeze > backend/requirements.txt
-```
-
-Then:
-
-```bash
-git add backend/requirements.txt
-git commit -m "Added <package>"
-git push
-```
-
----
-
-## 🔁 Rebuilding the App
-
-If you or a teammate updates dependencies:
-
-```bash
-docker compose down
-docker compose up --build
-```
-
----
-
-## 🤝 Team Workflow: Pull Requests
-
-> All code should be merged into `main` through pull requests!
-
-1. Checkout a feature branch (e.g., `backend`, `frontend`)
-2. Commit and push your changes
-3. Open a **Pull Request (PR)** from your branch into `main`
-4. Another teammate should review and approve before merging
-5. After merge, pull the latest `main` into your branch
-
-Pull Request template is located at:
-
-```plaintext
-.github/PULL_REQUEST_TEMPLATE.md
-```
-
----
-
-## 💡 Dev Tips
-
-- Use `docker compose down` to stop containers
-- Use `docker ps` or `docker compose ps` to see what’s running
-- Use `docker exec -it cpp-backend bash` to enter the backend container
-- You can skip frontend Docker during dev and just use `npm run dev`
+For production healthcare use, additional security measures and formal HIPAA compliance certification would be required.
