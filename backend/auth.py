@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from random import choice
 from sqlalchemy import text
 import logging
+from werkzeug.security import generate_password_hash, check_password_hash
+
 logging.basicConfig(level=logging.DEBUG)
 
 auth_bp = Blueprint("auth", __name__)
@@ -19,9 +21,9 @@ def login():
     logging.debug(f"Login attempt - Role: {role}, Name: {name}")
 
     if role == "student":
-        user = Student.query.filter_by(name=name, password=password).first()
-        if user:
-            # Check if mood already submitted today
+        user = Student.query.filter_by(name=name).first()
+        if user and check_password_hash(user.password, password):
+            #Check if mood already submitted today
             today = date.today()
             already_submitted = MoodSubmission.query.filter_by(
                 student_id=user.id,
@@ -31,9 +33,13 @@ def login():
                 return jsonify({
                     "error": "Mood already submitted for today. You can’t log in again today."
                 }), 403
+        else:
+            user = None
 
     elif role == "advisor":
-        user = Advisor.query.filter_by(name=name, password=password).first()
+        user = Advisor.query.filter_by(name=name).first()
+        if user and not check_password_hash(user.password, password):
+            user = None
     else:
         return jsonify({"error": "Invalid role"}), 400
 
