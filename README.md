@@ -96,6 +96,7 @@ Advisors (1) ──────< Students (N)
 | Data Isolation | Advisors only see their assigned patients |
 | Audit Timestamps | All records include `created_at` timestamps |
 | Secure API | CORS configured, credentials supported |
+| Password Hashing | Passwords stored using Werkzeug's secure hashing (PBKDF2-SHA256) |
 
 ---
 

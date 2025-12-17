@@ -101,7 +101,8 @@ def create_student():
         # Pick one advisor at random
         advisor = choice(advisors)
 
-        new_student = Student(name=name, password=password, advisor_id=advisor.id)
+        hashed_password = generate_password_hash(password)
+        new_student = Student(name=name, password=hashed_password, advisor_id=advisor.id)
         db.session.add(new_student)
         db.session.commit()
 
@@ -130,7 +131,8 @@ def create_advisor():
     if not name or not password:
         return jsonify({"error": "Name and password are required"}), 400
 
-    new_advisor = Advisor(name=name, password=password)
+    hashed_password = generate_password_hash(password)
+    new_advisor = Advisor(name=name, password=hashed_password)
     db.session.add(new_advisor)
     db.session.commit()
 
