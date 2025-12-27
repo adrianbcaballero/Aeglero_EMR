@@ -39,6 +39,10 @@ class MoodSubmission(db.Model):
 
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
+    __table_args__ = (
+        db.UniqueConstraint('student_id', 'date', name='_mood_student_date_uc'),
+    )
+
 class FormSubmission(db.Model):
     __tablename__ = 'form_submissions'
 

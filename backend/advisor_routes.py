@@ -147,7 +147,7 @@ def search_by_score(advisor_id):
 
 @advisor_bp.route("/advisor/<int:advisor_id>/graph-data", methods=["POST"])
 def generate_graph_data(advisor_id):
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, date
     data = request.get_json()
     selected_options = data.get("selections", [])
 
@@ -158,6 +158,8 @@ def generate_graph_data(advisor_id):
 
     for selection in selected_options:
         student_id = selection.get("studentId")
+        if isinstance(student_id, str) and student_id.isdigit():
+            student_id = int(student_id)
         date_range = selection.get("dateRange")
         data_type = selection.get("dataType")
 
@@ -175,18 +177,16 @@ def generate_graph_data(advisor_id):
                 ).join(Student).filter(Student.advisor_id == advisor_id)
 
                 if date_range == "month":
-                    base = base.filter(MoodSubmission.date >= datetime.utcnow() - timedelta(days=30))
+                    base = base.filter(MoodSubmission.date >= (datetime.utcnow().date() - timedelta(days=30)))
                 elif date_range == "week":
-                    base = base.filter(MoodSubmission.date >= datetime.utcnow() - timedelta(days=7))
+                    base = base.filter(MoodSubmission.date >= (datetime.utcnow().date() - timedelta(days=7)))
 
-                base = base.group_by(MoodSubmission.date).order_by(MoodSubmission.date)
-                results = base.all()
-
-                line_data = {
+                results = base.group_by(MoodSubmission.date).order_by(MoodSubmission.date).all()
+                response_data.append({
                     "id": f"All Students - {data_type}",
                     "data": [{"x": r.date.isoformat(), "y": r.value} for r in results]
-                }
-                response_data.append(line_data)
+                })
+                continue
             elif data_type == "form":
                 base = db.session.query(
                     FormSubmission.date,
@@ -194,60 +194,55 @@ def generate_graph_data(advisor_id):
                 ).join(Student).filter(Student.advisor_id == advisor_id)
 
                 if date_range == "month":
-                    base = base.filter(FormSubmission.date >= datetime.utcnow() - timedelta(days=30))
+                    base = base.filter(FormSubmission.date >= (datetime.utcnow().date() - timedelta(days=30)))
                 elif date_range == "week":
-                    base = base.filter(FormSubmission.date >= datetime.utcnow() - timedelta(days=7))
+                    base = base.filter(FormSubmission.date >= (datetime.utcnow().date() - timedelta(days=7)))
 
-                base = base.group_by(FormSubmission.date).order_by(FormSubmission.date)
-                results = base.all()
-
-                line_data = {
+                results = base.group_by(FormSubmission.date).order_by(FormSubmission.date).all()
+                response_data.append({
                     "id": f"All Students - {data_type}",
                     "data": [{"x": r.date.isoformat(), "y": r.value} for r in results]
-                }
-                response_data.append(line_data)
+                })
+                continue
             else:
                 continue
 
             if date_range == "month":
-                base = base.filter(Score.date >= datetime.utcnow() - timedelta(days=30))
+                base = base.filter(Score.date >= (datetime.utcnow().date() - timedelta(days=30)))
             elif date_range == "week":
-                base = base.filter(Score.date >= datetime.utcnow() - timedelta(days=7))
+                base = base.filter(Score.date >= (datetime.utcnow().date() - timedelta(days=7)))
 
-            base = base.group_by("date").order_by("date")
-            results = base.all()
-
-            line_data = {
+            results = base.group_by(Score.date).order_by(Score.date).all()
+            response_data.append({
                 "id": f"All Students - {data_type}",
                 "data": [{"x": r.date.isoformat(), "y": r.value} for r in results]
-            }
-            response_data.append(line_data)
+            })
 
         else:
             if data_type == "score":
                 query = Score.query.filter_by(student_id=student_id)
                 if date_range == "month":
-                    query = query.filter(Score.date >= datetime.utcnow() - timedelta(days=30))
+                    query = query.filter(Score.date >= (datetime.utcnow().date() - timedelta(days=30)))
                 elif date_range == "week":
-                    query = query.filter(Score.date >= datetime.utcnow() - timedelta(days=7))
+                    query = query.filter(Score.date >= (datetime.utcnow().date() - timedelta(days=7)))
                 scores = query.order_by(Score.date.asc()).all()
                 data_points = [{"x": s.date.isoformat(), "y": s.daily_score} for s in scores]
                 label = f"Student {student_id} - {data_type}"
             elif data_type == "mood":
                 query = MoodSubmission.query.filter_by(student_id=student_id)
                 if date_range == "month":
-                    query = query.filter(MoodSubmission.date >= datetime.utcnow() - timedelta(days=30))
+                    query = query.filter(MoodSubmission.date >= (datetime.utcnow().date() - timedelta(days=30)))
                 elif date_range == "week":
-                    query = query.filter(MoodSubmission.date >= datetime.utcnow() - timedelta(days=7))
+                    query = query.filter(MoodSubmission.date >= (datetime.utcnow().date() - timedelta(days=7)))
                 moods = query.order_by(MoodSubmission.date.asc()).all()
                 data_points = [{"x": m.date.isoformat(), "y": m.slider_value} for m in moods]
                 label = f"Student {student_id} - {data_type}"
             elif data_type == "form":
                 query = FormSubmission.query.filter_by(student_id=student_id)
                 if date_range == "month":
-                    query = query.filter(FormSubmission.date >= datetime.utcnow() - timedelta(days=30))
+                    query = query.filter(FormSubmission.date >= (datetime.utcnow().date() - timedelta(days=30)))
                 elif date_range == "week":
-                    query = query.filter(FormSubmission.date >= datetime.utcnow() - timedelta(days=7))
+                    query = query.filter(FormSubmission.date >= (datetime.utcnow().date() - timedelta(days=7)))
                 forms = query.order_by(FormSubmission.date.asc()).all()
                 from collections import defaultdict
                 day_counts = defaultdict(int)

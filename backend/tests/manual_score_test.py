@@ -27,6 +27,6 @@ with app.app_context():
     db.session.add(form)
     db.session.commit()
 
-    score = calculate_and_store_score(student.id, mood, form)
+    score = calculate_and_store_score(student.id, mood, image_name=mood.image, form_submission=form)
     print(f"Generated score for {student.name} (ID={student.id}): {score}")
 
