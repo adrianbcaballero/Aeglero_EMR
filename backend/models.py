@@ -1,0 +1,64 @@
+from datetime import datetime
+from app import db
+
+class User(db.Model):
+    __tablename__ = "user"
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+
+    #Roles: psychiatrist, technician, admin
+    role = db.Column(db.String(30), nullable=False)  
+    full_name = db.Column(db.String(120), nullable=True)
+
+    failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
+    locked_until = db.Column(db.DateTime, nullable=True)
+
+
+class Patient(db.Model):
+    __tablename__ = "patient"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    #Unique patient code for refrencing 
+    patient_code = db.Column(db.String(20), unique=True, nullable=False)
+
+    first_name = db.Column(db.String(80), nullable=False)
+    last_name = db.Column(db.String(80), nullable=False)
+    date_of_birth = db.Column(db.Date, nullable=True)
+
+    phone = db.Column(db.String(30), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+
+    status = db.Column(db.String(30), default="active", nullable=False)   #active/inactive/archived
+    risk_level = db.Column(db.String(20), default="low", nullable=False)  #low/moderate/high
+
+    primary_diagnosis = db.Column(db.String(120), nullable=True)
+    insurance = db.Column(db.String(120), nullable=True)
+
+    assigned_provider_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+class UserSession(db.Model):
+    __tablename__ = "user_session"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+
+
+class AuditLog(db.Model):
+    __tablename__ = "audit_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user_id = db.Column(db.Integer, nullable=True)
+    action = db.Column(db.String(80), nullable=False)
+    resource = db.Column(db.String(120), nullable=False)
+    ip_address = db.Column(db.String(45), nullable=True)
+
+    #success or fail
+    status = db.Column(db.String(20), nullable=False)  

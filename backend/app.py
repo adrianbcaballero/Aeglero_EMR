@@ -15,6 +15,11 @@ def create_app():
 
     db.init_app(app)
 
+    import models
+
+    with app.app_context():
+        db.create_all()
+
     @app.get("/health")
     def health():
         return {"ok": True}
