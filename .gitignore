@@ -1,38 +1,65 @@
-backend/.env
-docker-compose.override.yml
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
 
-# Python
+# Python caches / builds
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.pyc
+*$py.class
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.ipynb_checkpoints/
 
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
 
-# Flask
+# Flask / local runtime
 instance/
-backend/.env
-*.env
-
-# Node
-node_modules/
-frontend/node_modules/
-frontend/dist/
-
-# Logs
 *.log
 
+
+
 # Docker
+**/.dockerignore
 docker-compose.override.yml
-*.pid
 
-# macOS
-.DS_Store
+# Node / frontend 
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp/
+.pnp.js
+dist/
+build/
 
-# IDEs
-.idea/
+# IDEs / editors
 .vscode/
+*.iml
 
-# System files
+
+# OS junk and misc
+.DS_Store
 Thumbs.db
-ehthumbs.db
+Desktop.ini
+*.swp
+*.swo
