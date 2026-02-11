@@ -1,0 +1,122 @@
+"use client"
+
+import { useState } from "react"
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
+import { LoginPage } from "@/components/login-page"
+import type { UserRole } from "@/components/login-page"
+import { DashboardView } from "@/components/dashboard-view"
+import { PatientsView } from "@/components/patients-view"
+import { TreatmentPlansView } from "@/components/treatment-plans-view"
+import { WorkflowsView } from "@/components/workflows-view"
+import { SystemLogsView } from "@/components/system-logs-view"
+import { ManageUsersView } from "@/components/manage-users-view"
+import { SettingsView } from "@/components/settings-view"
+import { HelpView } from "@/components/help-view"
+import { HIPAAComplianceGuidelines } from "@/components/hipaa-compliance-guidelines"
+import { Separator } from "@/components/ui/separator"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+
+export default function EHRApp() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userRole, setUserRole] = useState<UserRole>("psychiatrist")
+  const [activeItem, setActiveItem] = useState("Dashboard")
+  const [navOptions, setNavOptions] = useState<{ filter?: string; patientId?: string } | null>(null)
+
+  if (!isLoggedIn) {
+    return (
+      <LoginPage
+        onLogin={(role) => {
+          setUserRole(role)
+          setIsLoggedIn(true)
+        }}
+      />
+    )
+  }
+
+  const handleNavigate = (tab: string, options?: { filter?: string; patientId?: string }) => {
+    setActiveItem(tab)
+    setNavOptions(options || null)
+  }
+
+  const handleSidebarNavigate = (tab: string) => {
+    setActiveItem(tab)
+    setNavOptions(null)
+  }
+
+  const renderView = () => {
+    switch (activeItem) {
+      case "Dashboard":
+        return <DashboardView onNavigate={handleNavigate} userRole={userRole} />
+      case "Patients":
+        return (
+          <PatientsView
+            initialFilter={
+              navOptions?.filter as "intake-complete" | "intake-incomplete" | "dr-completion" | null | undefined
+            }
+            initialPatientId={navOptions?.patientId}
+          />
+        )
+      case "Treatment Plans":
+        return <TreatmentPlansView initialPatientId={navOptions?.patientId} />
+      case "Workflows":
+        return <WorkflowsView />
+      case "System Logs":
+        return <SystemLogsView />
+      case "Manage Users":
+        return <ManageUsersView />
+      case "Settings":
+        return <SettingsView />
+      case "Help & Support":
+        return <HelpView />
+      case "HIPAA Compliance Guidelines":
+        return <HIPAAComplianceGuidelines />
+      default:
+        return <DashboardView onNavigate={handleNavigate} userRole={userRole} />
+    }
+  }
+
+  return (
+    <SidebarProvider>
+      <AppSidebar
+        activeItem={activeItem}
+        onNavigate={handleSidebarNavigate}
+        onSignOut={() => {
+          setIsLoggedIn(false)
+          setActiveItem("Dashboard")
+          setNavOptions(null)
+        }}
+        userRole={userRole}
+      />
+      <SidebarInset>
+        <header className="flex h-14 items-center gap-3 border-b border-border bg-card px-4">
+          <SidebarTrigger className="-ml-1 text-foreground" />
+          <Separator orientation="vertical" className="h-5" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <span className="text-xs text-muted-foreground">Aeglero EMR</span>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage className="text-xs font-medium text-foreground">
+                  {activeItem}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          {renderView()}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}

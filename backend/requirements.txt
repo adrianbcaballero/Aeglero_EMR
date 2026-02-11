@@ -1,7 +1,0 @@
-flask==2.3.3
-flask-cors
-gunicorn==21.2.0
-flask-sqlalchemy
-psycopg2-binary
-python-dotenv
-openai==1.75.0
