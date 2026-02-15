@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 # Ensure imports work when running from /app/scripts
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -79,7 +79,7 @@ def seed():
                 resource="database",
                 ip_address="127.0.0.1",
                 status="SUCCESS",
-                timestamp=datetime.utcnow() - timedelta(days=1),
+                timestamp=datetime.now(timezone.utc) - timedelta(days=1),
             ),
             AuditLog(
                 user_id=technician.id if technician else None,

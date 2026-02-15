@@ -13,7 +13,7 @@ class User(db.Model):
     full_name = db.Column(db.String(120), nullable=True)
 
     failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
-    locked_until = db.Column(db.DateTime, nullable=True)
+    locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
 class Patient(db.Model):
@@ -46,7 +46,7 @@ class UserSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    expires_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
 
 
 class AuditLog(db.Model):

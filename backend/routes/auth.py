@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 
 from flask import Blueprint, request
@@ -42,7 +42,7 @@ def _validate_session(session_id: str):
     if not sess:
         return None, None
 
-    if sess.expires_at < datetime.utcnow():
+    if sess.expires_at < datetime.now(timezone.utc):
         #delete expired session
         db.session.delete(sess)
         db.session.commit()
@@ -77,8 +77,8 @@ def login():
         log_access(None, "LOGIN", "auth", "FAILED", ip)
         return {"error": "invalid credentials"}, 401
 
-    #Check lockout
-    if user.locked_until and user.locked_until > datetime.utcnow():
+    # Check lockout
+    if user.locked_until and user.locked_until > datetime.now(timezone.utc):
         log_access(user.id, "LOGIN", "auth", "FAILED", ip)
         return {"error": "account locked. try again later"}, 403
 
@@ -88,7 +88,7 @@ def login():
 
         # Lock if too many failed attempts
         if user.failed_login_attempts >= config.MAX_FAILED_LOGINS:
-            user.locked_until = datetime.utcnow() + timedelta(minutes=config.ACCOUNT_LOCKOUT_MINUTES)
+            user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=config.ACCOUNT_LOCKOUT_MINUTES)
 
         db.session.commit()
         log_access(user.id, "LOGIN", "auth", "FAILED", ip)
@@ -101,7 +101,7 @@ def login():
 
     # Create session
     session_id = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
 
     sess = UserSession(session_id=session_id, user_id=user.id, expires_at=expires_at)
     db.session.add(sess)

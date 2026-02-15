@@ -1,5 +1,5 @@
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import request, g
 
@@ -34,7 +34,7 @@ def _validate_session(session_id: str):
     if not sess:
         return None, None
 
-    if sess.expires_at < datetime.utcnow():
+    if sess.expires_at < datetime.now(timezone.utc):
         db.session.delete(sess)
         db.session.commit()
         return None, None
