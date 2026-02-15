@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, g
 from flask_cors import CORS
 import config
 from extensions import db
@@ -16,6 +16,7 @@ def create_app():
 
 
     from routes.auth import auth_bp
+    from auth_middleware import require_auth
     app.register_blueprint(auth_bp)
 
     import models
@@ -25,6 +26,11 @@ def create_app():
     @app.get("/health")
     def health():
         return {"ok": True}
+    
+    @app.get("/api/protected/ping")
+    @require_auth()
+    def protected_ping():
+        return {"ok": True, "user": {"id": g.user.id, "username": g.user.username, "role": g.user.role}}
 
     return app
 
