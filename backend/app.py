@@ -1,9 +1,8 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import config
+from extensions import db
 
-db = SQLAlchemy()
 
 def create_app():
     app = Flask(__name__)
@@ -15,8 +14,11 @@ def create_app():
 
     db.init_app(app)
 
-    import models
 
+    from routes.auth import auth_bp
+    app.register_blueprint(auth_bp)
+
+    import models
     with app.app_context():
         db.create_all()
 
@@ -24,7 +26,6 @@ def create_app():
     def health():
         return {"ok": True}
 
-    # tables will be created once models exist (Step 2)
     return app
 
 app = create_app()

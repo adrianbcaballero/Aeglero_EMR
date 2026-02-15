@@ -1,4 +1,4 @@
-# creating data for demo
+# creating data into database for testing purposes
 
 import os
 import sys
@@ -8,7 +8,8 @@ from datetime import date, datetime, timedelta
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from werkzeug.security import generate_password_hash
-from app import create_app, db
+from app import create_app
+from extensions import db
 from models import User, Patient, AuditLog
 
 app = create_app()

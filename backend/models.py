@@ -1,5 +1,5 @@
-from datetime import datetime
-from app import db
+from datetime import datetime, timezone
+from extensions import db
 
 class User(db.Model):
     __tablename__ = "user"
@@ -53,7 +53,11 @@ class AuditLog(db.Model):
     __tablename__ = "audit_log"
 
     id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = db.Column(db.DateTime(timezone=True),
+    default=lambda: datetime.now(timezone.utc),
+    nullable=False
+    )
+
 
     user_id = db.Column(db.Integer, nullable=True)
     action = db.Column(db.String(80), nullable=False)
