@@ -5,7 +5,57 @@ from auth_middleware import require_auth
 from extensions import db
 from models import Patient, User
 
+from datetime import date
+import re
+from services.audit_logger import log_access
+
+
 patients_bp = Blueprint("patients", __name__, url_prefix="/api/patients")
+
+VALID_RISK = {"low", "moderate", "high"}
+VALID_STATUS = {"active", "inactive", "archived"}
+
+def _client_ip():
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.remote_addr
+
+
+def _parse_date_iso(value):
+    if value in (None, ""):
+        return None
+    try:
+        # expects YYYY-MM-DD
+        return date.fromisoformat(value)
+    except ValueError:
+        return "INVALID"
+
+
+def _next_patient_code():
+    """
+    Generates the next PT-### code based on max existing.
+    PT-001, PT-002, ...
+    """
+    codes = db.session.query(Patient.patient_code).all()
+    max_n = 0
+    for (code,) in codes:
+        if not code:
+            continue
+        m = re.match(r"^PT-(\d{3,})$", code)
+        if m:
+            n = int(m.group(1))
+            max_n = max(max_n, n)
+    return f"PT-{max_n + 1:03d}"
+
+
+def _get_patient_by_id_or_code(patient_id: str):
+    p = None
+    if patient_id.isdigit():
+        p = Patient.query.get(int(patient_id))
+    if not p:
+        p = Patient.query.filter_by(patient_code=patient_id).first()
+    return p
 
 
 def _serialize_patient(p: Patient):
@@ -29,7 +79,7 @@ def _serialize_patient(p: Patient):
         "riskLevel": p.risk_level,
         "assignedProvider": provider_name,
 
-        # not implemented until appointments exist
+        #appointments are not being implemented
         "lastVisit": None,
         "nextAppointment": None,
     }
@@ -107,10 +157,190 @@ def get_patient(patient_id):
     if g.user.role == "technician" and p.assigned_provider_id != g.user.id:
         return {"error": "forbidden"}, 403
 
-    # “Full record” placeholder (appointments/notes/plan come later)
+    # appointments are not being implemented
     return {
         **_serialize_patient(p),
         "appointments": [],
         "notes": [],
         "treatmentPlan": None,
     }, 200
+
+
+@patients_bp.post("")
+@require_auth(roles=["technician", "psychiatrist", "admin"])
+def create_patient():
+    """
+    POST /api/patients
+    Body expects camelCase keys like frontend:
+    {
+      patientCode?:"PT-001",
+      firstName, lastName, dateOfBirth?,
+      phone?, email?, status?, riskLevel?,
+      primaryDiagnosis?, insurance?,
+      assignedProviderId? (optional)
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    ip = _client_ip()
+
+    first_name = (data.get("firstName") or "").strip()
+    last_name = (data.get("lastName") or "").strip()
+
+    if not first_name or not last_name:
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        return {"error": "firstName and lastName are required"}, 400
+
+    dob = _parse_date_iso(data.get("dateOfBirth"))
+    if dob == "INVALID":
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        return {"error": "dateOfBirth must be YYYY-MM-DD"}, 400
+
+    status = (data.get("status") or "active").strip()
+    risk = (data.get("riskLevel") or "low").strip()
+
+    if status not in VALID_STATUS:
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        return {"error": f"status must be one of {sorted(VALID_STATUS)}"}, 400
+
+    if risk not in VALID_RISK:
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        return {"error": f"riskLevel must be one of {sorted(VALID_RISK)}"}, 400
+
+    #assigned provider handling
+    assigned_provider_id = data.get("assignedProviderId")
+
+    if g.user.role == "technician":
+        # technicians can only assign to themselves (or leave null -> force to self)
+        assigned_provider_id = g.user.id
+
+    # If psychiatrist/admin set it, ensure it's valid if provided
+    if assigned_provider_id is not None:
+        try:
+            assigned_provider_id = int(assigned_provider_id)
+        except ValueError:
+            log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+            return {"error": "assignedProviderId must be an integer"}, 400
+
+        if not User.query.get(assigned_provider_id):
+            log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+            return {"error": "assignedProviderId does not exist"}, 400
+
+    patient_code = (data.get("patientCode") or "").strip()
+    if patient_code:
+        # validate uniqueness if provided
+        existing = Patient.query.filter_by(patient_code=patient_code).first()
+        if existing:
+            log_access(g.user.id, "PATIENT_CREATE", f"patient/{patient_code}", "FAILED", ip)
+            return {"error": "patientCode already exists"}, 409
+    else:
+        patient_code = _next_patient_code()
+
+    p = Patient(
+        patient_code=patient_code,
+        first_name=first_name,
+        last_name=last_name,
+        date_of_birth=dob,
+        phone=(data.get("phone") or "").strip() or None,
+        email=(data.get("email") or "").strip() or None,
+        status=status,
+        risk_level=risk,
+        primary_diagnosis=(data.get("primaryDiagnosis") or "").strip() or None,
+        insurance=(data.get("insurance") or "").strip() or None,
+        assigned_provider_id=assigned_provider_id,
+    )
+
+    db.session.add(p)
+    db.session.commit()
+
+    log_access(g.user.id, "PATIENT_CREATE", f"patient/{p.patient_code}", "SUCCESS", ip)
+    return _serialize_patient(p), 201
+
+
+@patients_bp.put("/<patient_id>")
+@require_auth(roles=["technician", "psychiatrist", "admin"])
+def update_patient(patient_id):
+    """
+    PUT /api/patients/<PT-001 or db id>
+    Body can include any updatable patient fields in camelCase.
+    """
+    data = request.get_json(silent=True) or {}
+    ip = _client_ip()
+
+    p = _get_patient_by_id_or_code(patient_id)
+    if not p:
+        log_access(g.user.id, "PATIENT_UPDATE", f"patient/{patient_id}", "FAILED", ip)
+        return {"error": "patient not found"}, 404
+
+    #technician can only update assigned
+    if g.user.role == "technician" and p.assigned_provider_id != g.user.id:
+        log_access(g.user.id, "PATIENT_UPDATE", f"patient/{p.patient_code}", "FAILED", ip)
+        return {"error": "forbidden"}, 403
+
+    #Update allowed fields
+    if "firstName" in data:
+        val = (data.get("firstName") or "").strip()
+        if not val:
+            return {"error": "firstName cannot be empty"}, 400
+        p.first_name = val
+
+    if "lastName" in data:
+        val = (data.get("lastName") or "").strip()
+        if not val:
+            return {"error": "lastName cannot be empty"}, 400
+        p.last_name = val
+
+    if "dateOfBirth" in data:
+        dob = _parse_date_iso(data.get("dateOfBirth"))
+        if dob == "INVALID":
+            return {"error": "dateOfBirth must be YYYY-MM-DD"}, 400
+        p.date_of_birth = dob
+
+    if "phone" in data:
+        p.phone = (data.get("phone") or "").strip() or None
+
+    if "email" in data:
+        p.email = (data.get("email") or "").strip() or None
+
+    if "primaryDiagnosis" in data:
+        p.primary_diagnosis = (data.get("primaryDiagnosis") or "").strip() or None
+
+    if "insurance" in data:
+        p.insurance = (data.get("insurance") or "").strip() or None
+
+    if "status" in data:
+        status = (data.get("status") or "").strip()
+        if status not in VALID_STATUS:
+            return {"error": f"status must be one of {sorted(VALID_STATUS)}"}, 400
+        p.status = status
+
+    if "riskLevel" in data:
+        risk = (data.get("riskLevel") or "").strip()
+        if risk not in VALID_RISK:
+            return {"error": f"riskLevel must be one of {sorted(VALID_RISK)}"}, 400
+        p.risk_level = risk
+
+    #Provider assignment rules
+    if "assignedProviderId" in data:
+        if g.user.role == "technician":
+            #technicians cannot reassign
+            return {"error": "technician cannot change assignedProviderId"}, 403
+
+        apid = data.get("assignedProviderId")
+        if apid is None or apid == "":
+            p.assigned_provider_id = None
+        else:
+            try:
+                apid = int(apid)
+            except ValueError:
+                return {"error": "assignedProviderId must be an integer"}, 400
+
+            if not User.query.get(apid):
+                return {"error": "assignedProviderId does not exist"}, 400
+
+            p.assigned_provider_id = apid
+
+    db.session.commit()
+
+    log_access(g.user.id, "PATIENT_UPDATE", f"patient/{p.patient_code}", "SUCCESS", ip)
+    return _serialize_patient(p), 200
+
