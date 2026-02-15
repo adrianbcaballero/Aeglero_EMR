@@ -17,7 +17,11 @@ def create_app():
 
     from routes.auth import auth_bp
     from auth_middleware import require_auth
+
     app.register_blueprint(auth_bp)
+
+    from routes.patients import patients_bp
+    app.register_blueprint(patients_bp)
 
     import models
     with app.app_context():
