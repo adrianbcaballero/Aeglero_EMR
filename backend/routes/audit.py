@@ -52,16 +52,6 @@ def _serialize_log(row: AuditLog):
 @audit_bp.get("/logs")
 @require_auth(roles=["admin"])
 def get_audit_logs():
-    """
-    GET /api/audit/logs
-    Query params:
-      user_id=2
-      action=NOTE_CREATE
-      status=SUCCESS|FAILED
-      date_from=YYYY-MM-DD
-      date_to=YYYY-MM-DD
-      limit=200
-    """
     ip = _client_ip()
 
     user_id = request.args.get("user_id")
@@ -70,15 +60,15 @@ def get_audit_logs():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
     limit = request.args.get("limit", "200")
+    before_id = request.args.get("before_id")
     resource_contains = (request.args.get("resource_contains") or "").strip()
-
 
     try:
         limit = min(int(limit), 500)
     except ValueError:
         limit = 200
 
-    q = AuditLog.query
+    q = db.session.query(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id)
 
     if user_id:
         try:
@@ -86,6 +76,13 @@ def get_audit_logs():
         except ValueError:
             log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
             return {"error": "user_id must be an integer"}, 400
+        
+    if before_id:
+        try:
+            q = q.filter(AuditLog.id < int(before_id))
+        except ValueError:
+            log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
+            return {"error": "before_id must be an integer"}, 400
 
     if action:
         q = q.filter(AuditLog.action == action)
@@ -93,11 +90,11 @@ def get_audit_logs():
     if status:
         q = q.filter(AuditLog.status == status)
 
-    dt_from = _parse_date(date_from)
-    dt_to = _parse_date(date_to)
-
     if resource_contains:
         q = q.filter(AuditLog.resource.ilike(f"%{resource_contains}%"))
+
+    dt_from = _parse_date(date_from)
+    dt_to = _parse_date(date_to)
 
     if dt_from == "INVALID" or dt_to == "INVALID":
         log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
@@ -107,14 +104,33 @@ def get_audit_logs():
         q = q.filter(AuditLog.timestamp >= dt_from)
 
     if dt_to:
-        #include the whole date_to day by making it exclusive next day
         q = q.filter(AuditLog.timestamp < (dt_to + timedelta(days=1)))
 
-    rows = q.order_by(AuditLog.id.desc()).limit(limit).all()
+    total = q.count()
 
+    rows = (
+        q.order_by(AuditLog.id.desc())
+         .limit(limit)
+         .all()
+    )
 
+    items = []
+    for log, username in rows:
+        items.append({
+            "id": log.id,
+            "timestamp": log.timestamp.isoformat(),
+            "userId": log.user_id,
+            "username": username,
+            "action": log.action,
+            "resource": log.resource,
+            "ipAddress": log.ip_address,
+            "status": log.status,
+        })
+    next_before_id = items[-1]["id"] if items else None
+    
     log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "SUCCESS", ip)
-    return [_serialize_log(r) for r in rows], 200
+    return {"total": total, "nextBeforeId": next_before_id, "items": items}, 200
+
 
 
 @audit_bp.get("/stats")
