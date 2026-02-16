@@ -70,6 +70,8 @@ def get_audit_logs():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
     limit = request.args.get("limit", "200")
+    resource_contains = (request.args.get("resource_contains") or "").strip()
+
 
     try:
         limit = min(int(limit), 500)
@@ -94,6 +96,9 @@ def get_audit_logs():
     dt_from = _parse_date(date_from)
     dt_to = _parse_date(date_to)
 
+    if resource_contains:
+        q = q.filter(AuditLog.resource.ilike(f"%{resource_contains}%"))
+
     if dt_from == "INVALID" or dt_to == "INVALID":
         log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
         return {"error": "date_from/date_to must be YYYY-MM-DD"}, 400
@@ -107,6 +112,7 @@ def get_audit_logs():
 
     rows = q.order_by(AuditLog.id.desc()).limit(limit).all()
 
+
     log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "SUCCESS", ip)
     return [_serialize_log(r) for r in rows], 200
 
@@ -118,8 +124,10 @@ def get_audit_stats():
     GET /api/audit/stats
     Returns:
       total_logins_today
-      failed_attempts_today
-      unauthorized_attempts_today
+      failed_logins_today
+      not_authenticated_today (401)
+      unauthorized_attempts_today (403)
+      server_errors_today (500)
       active_sessions
     """
     ip = _client_ip()
@@ -128,53 +136,31 @@ def get_audit_stats():
     start_today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
     start_tomorrow = start_today + timedelta(days=1)
 
-    #successful logins today
-    total_logins_today = (
-        db.session.query(AuditLog)
-        .filter(AuditLog.action == "LOGIN", AuditLog.status == "SUCCESS",
-                AuditLog.timestamp >= start_today, AuditLog.timestamp < start_tomorrow)
-        .count()
-    )
-
-    #Count failed logins today
-    failed_attempts_today = (
-        db.session.query(AuditLog)
-        .filter(AuditLog.action == "LOGIN", AuditLog.status == "FAILED",
-                AuditLog.timestamp >= start_today, AuditLog.timestamp < start_tomorrow)
-        .count()
-    )
-
-    #Unauthorized attempts (403) today, need to update middleware to log those with resource containing "forbidden"
-    unauthorized_attempts_today = (
-        db.session.query(AuditLog)
-        .filter(
-            AuditLog.action == "ACCESS_403",
-            AuditLog.status == "FAILED",
+    def _count(action, status=None):
+        q = db.session.query(AuditLog).filter(
+            AuditLog.action == action,
             AuditLog.timestamp >= start_today,
-            AuditLog.timestamp < start_tomorrow
+            AuditLog.timestamp < start_tomorrow,
         )
-        .count()
-    )
+        if status:
+            q = q.filter(AuditLog.status == status)
+        return q.count()
 
-    not_authenticated_today = (
-        db.session.query(AuditLog)
-        .filter(
-            AuditLog.action == "ACCESS_401",
-            AuditLog.status == "FAILED",
-            AuditLog.timestamp >= start_today,
-            AuditLog.timestamp < start_tomorrow
-        )
-        .count()
-    )
+    total_logins_today = _count("LOGIN", "SUCCESS")
+    failed_logins_today = _count("LOGIN", "FAILED")
 
-    #Active sessions presently in the system (not expired)
+    not_authenticated_today = _count("ACCESS_401", "FAILED")
+    unauthorized_attempts_today = _count("ACCESS_403", "FAILED")
+    server_errors_today = _count("ACCESS_500", "FAILED")
+
     active_sessions = UserSession.query.count()
 
     log_access(g.user.id, "AUDIT_STATS", "audit/stats", "SUCCESS", ip)
     return {
         "total_logins_today": total_logins_today,
-        "failed_attempts_today": failed_attempts_today,
-        "unauthorized_attempts_today": unauthorized_attempts_today,
-        "active_sessions": active_sessions,
+        "failed_logins_today": failed_logins_today,
         "not_authenticated_today": not_authenticated_today,
+        "unauthorized_attempts_today": unauthorized_attempts_today,
+        "server_errors_today": server_errors_today,
+        "active_sessions": active_sessions,
     }, 200
