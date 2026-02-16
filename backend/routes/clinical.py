@@ -6,6 +6,7 @@ from auth_middleware import require_auth
 from extensions import db
 from models import Patient, User, ClinicalNote, TreatmentPlan
 from services.audit_logger import log_access
+from services.scoring import calculate_risk_level
 
 clinical_bp = Blueprint("clinical", __name__, url_prefix="/api/patients")
 
@@ -140,8 +141,19 @@ def create_note(patient_id):
     db.session.add(n)
     db.session.commit()
 
-    log_access(g.user.id, "NOTE_CREATE", f"patient/{p.patient_code}/notes", "SUCCESS", ip)
-    return _serialize_note(n), 201
+    # Update patient risk level after new note
+    try:
+        new_risk = calculate_risk_level(p.id)
+        p.risk_level = new_risk
+        db.session.commit()
+        log_access(g.user.id, "RISK_SCORE_UPDATE", f"patient/{p.patient_code}", "SUCCESS", ip)
+        resp = _serialize_note(n)
+        resp["patientRiskLevel"] = p.risk_level
+        return resp, 201
+    except Exception:
+        db.session.rollback()
+        log_access(g.user.id, "RISK_SCORE_UPDATE", f"patient/{p.patient_code}", "FAILED", ip)
+
 
 
 # TREATMENT PLAN (single current plan per patient)
