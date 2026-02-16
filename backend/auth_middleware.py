@@ -47,14 +47,6 @@ def _validate_session(session_id: str):
 
 
 def require_auth(roles=None):
-    """
-    Decorator to protect routes.
-    - roles=None: any logged-in user allowed
-    - roles=["admin"]: only those roles allowed
-    Uses Authorization: Bearer <session_id>
-    Attaches g.user
-    Logs access attempt to AuditLog
-    """
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
@@ -63,17 +55,21 @@ def require_auth(roles=None):
 
             user, sess = _validate_session(session_id)
             if not user:
-                log_access(None, "ACCESS", request.path, "FAILED", ip)
+                log_access(None, "ACCESS_401", request.path, "FAILED", ip)
                 return {"error": "not authenticated"}, 401
 
             if roles and user.role not in roles:
-                log_access(user.id, "ACCESS", request.path, "FAILED", ip)
+                log_access(user.id, "ACCESS_403", request.path, "FAILED", ip)
                 return {"error": "forbidden"}, 403
 
             #Atach user
             g.user = user
-
-            log_access(user.id, "ACCESS", request.path, "SUCCESS", ip)
-            return fn(*args, **kwargs)
+            try:
+                resp = fn(*args, **kwargs)
+                log_access(user.id, "ACCESS_200", request.path, "SUCCESS", ip)
+                return resp
+            except Exception:
+                log_access(user.id, "ACCESS_500", request.path, "FAILED", ip)
+                raise
         return wrapper
     return decorator

@@ -147,10 +147,23 @@ def get_audit_stats():
     #Unauthorized attempts (403) today, need to update middleware to log those with resource containing "forbidden"
     unauthorized_attempts_today = (
         db.session.query(AuditLog)
-        .filter(AuditLog.status == "FAILED",
-                AuditLog.action.in_(["ACCESS"]),
-                AuditLog.resource.ilike("%forbidden%"),
-                AuditLog.timestamp >= start_today, AuditLog.timestamp < start_tomorrow)
+        .filter(
+            AuditLog.action == "ACCESS_403",
+            AuditLog.status == "FAILED",
+            AuditLog.timestamp >= start_today,
+            AuditLog.timestamp < start_tomorrow
+        )
+        .count()
+    )
+
+    not_authenticated_today = (
+        db.session.query(AuditLog)
+        .filter(
+            AuditLog.action == "ACCESS_401",
+            AuditLog.status == "FAILED",
+            AuditLog.timestamp >= start_today,
+            AuditLog.timestamp < start_tomorrow
+        )
         .count()
     )
 
@@ -163,4 +176,5 @@ def get_audit_stats():
         "failed_attempts_today": failed_attempts_today,
         "unauthorized_attempts_today": unauthorized_attempts_today,
         "active_sessions": active_sessions,
+        "not_authenticated_today": not_authenticated_today,
     }, 200
