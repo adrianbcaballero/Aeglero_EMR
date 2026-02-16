@@ -26,6 +26,9 @@ def create_app():
     from routes.users import users_bp
     app.register_blueprint(users_bp)
 
+    from routes.clinical import clinical_bp
+    app.register_blueprint(clinical_bp)
+
     import models
     with app.app_context():
         db.create_all()
