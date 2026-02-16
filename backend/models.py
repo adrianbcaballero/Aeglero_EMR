@@ -66,3 +66,54 @@ class AuditLog(db.Model):
 
     #success or fail
     status = db.Column(db.String(20), nullable=False)  
+
+
+
+class ClinicalNote(db.Model):
+    __tablename__ = "clinical_note"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False, index=True)
+    provider_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+
+    #when the note was created/documented
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True
+    )
+
+    #"progress", "intake", "discharge"
+    note_type = db.Column(db.String(50), nullable=False, default="progress")
+
+    #draft/signed
+    status = db.Column(db.String(20), nullable=False, default="draft")
+
+    summary = db.Column(db.Text, nullable=True)
+    diagnosis = db.Column(db.String(120), nullable=True)
+
+
+class TreatmentPlan(db.Model):
+    __tablename__ = "treatment_plan"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False, index=True, unique=True)
+
+    start_date = db.Column(db.Date, nullable=True)
+    review_date = db.Column(db.Date, nullable=True)
+
+    #JSON goals list/object
+    goals = db.Column(db.JSON, nullable=False, default=list)
+
+    #active/archived
+    status = db.Column(db.String(20), nullable=False, default="active")
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
