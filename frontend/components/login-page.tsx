@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { getHealth } from "@/lib/api"
+import { getHealth, login as apiLogin } from "@/lib/api"
+import type { LoginResponse } from "@/lib/api"
 
 import { Brain, LogIn, ChevronDown, ChevronUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,19 +13,20 @@ import { Label } from "@/components/ui/label"
 export type UserRole = "psychiatrist" | "technician" | "admin"
 
 const demoAccounts: { username: string; password: string; role: UserRole; label: string }[] = [
-  { username: "dr.chen", password: "demo1234", role: "psychiatrist", label: "Psychiatrist" },
-  { username: "tech.sarah", password: "demo5678", role: "technician", label: "Technician" },
-  { username: "admin.root", password: "demo9012", role: "admin", label: "Admin" },
+  { username: "psychiatrist1", password: "password123!", role: "psychiatrist", label: "Psychiatrist" },
+  { username: "technician1", password: "password123!", role: "technician", label: "Technician" },
+  { username: "admin1", password: "password123!", role: "admin", label: "Admin" },
 ]
 
 interface LoginPageProps {
-  onLogin: (role: UserRole) => void
+  onLogin: (role: UserRole, session: LoginResponse) => void
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
   const [notesExpanded, setNotesExpanded] = useState(false)
 
   const [backendOk, setBackendOk] = useState<boolean | null>(null)
@@ -45,13 +47,24 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
   }, [])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const match = demoAccounts.find((a) => a.username === username && a.password === password)
-    if (match) {
-      onLogin(match.role)
-    } else {
-      setError("Invalid username or password")
+    if (!username.trim() || !password) {
+      setError("Username and password required")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+
+    try {
+      const res = await apiLogin(username.trim(), password)
+      onLogin(res.role as UserRole, res)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Login failed"
+      setError(message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -66,7 +79,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             className="flex items-center justify-between w-full p-3 bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer"
           >
             <span className="text-xs font-semibold text-foreground tracking-wide">
-              Presentation Sign Ins
+              Demo Sign Ins
             </span>
             {notesExpanded ? (
               <ChevronUp className="size-3.5 text-muted-foreground" />
@@ -149,6 +162,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     setError("")
                   }}
                   className="h-10"
+                  disabled={loading}
                 />
               </div>
 
@@ -166,6 +180,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     setError("")
                   }}
                   className="h-10"
+                  disabled={loading}
                 />
               </div>
 
@@ -174,9 +189,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               <Button
                 type="submit"
                 className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={loading}
               >
                 <LogIn className="mr-2 size-4" />
-                Sign In
+                {loading ? "Signing in…" : "Sign In"}
               </Button>
             </form>
           </CardContent>

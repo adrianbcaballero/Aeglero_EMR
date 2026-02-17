@@ -15,6 +15,9 @@ import { SettingsView } from "@/components/settings-view"
 import { HelpView } from "@/components/help-view"
 import { HIPAAComplianceGuidelines } from "@/components/hipaa-compliance-guidelines"
 import { Separator } from "@/components/ui/separator"
+import { setSessionToken, logout as apiLogout } from "@/lib/api"
+import { LoginResponse } from "@/lib/api"
+
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -32,7 +35,8 @@ export default function EHRApp() {
   if (!isLoggedIn) {
     return (
       <LoginPage
-        onLogin={(role) => {
+        onLogin={(role, session) => {
+          setSessionToken(session.session_id)
           setUserRole(role)
           setIsLoggedIn(true)
         }}
@@ -88,6 +92,8 @@ export default function EHRApp() {
         activeItem={activeItem}
         onNavigate={handleSidebarNavigate}
         onSignOut={() => {
+          apiLogout().catch(() => {})
+          setSessionToken(null)
           setIsLoggedIn(false)
           setActiveItem("Dashboard")
           setNavOptions(null)
