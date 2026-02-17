@@ -1,7 +1,8 @@
 "use client"
 
-import React from "react"
-import { useState } from "react"
+import React, { useEffect, useState } from "react"
+import { getHealth } from "@/lib/api"
+
 import { Brain, LogIn, ChevronDown, ChevronUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,11 +27,27 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [error, setError] = useState("")
   const [notesExpanded, setNotesExpanded] = useState(false)
 
+  const [backendOk, setBackendOk] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    getHealth()
+      .then(() => {
+        if (!cancelled) setBackendOk(true)
+      })
+      .catch(() => {
+        if (!cancelled) setBackendOk(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const match = demoAccounts.find(
-      (a) => a.username === username && a.password === password
-    )
+    const match = demoAccounts.find((a) => a.username === username && a.password === password)
     if (match) {
       onLogin(match.role)
     } else {
@@ -48,13 +65,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             onClick={() => setNotesExpanded(!notesExpanded)}
             className="flex items-center justify-between w-full p-3 bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer"
           >
-            <span className="text-xs font-semibold text-foreground tracking-wide">Presentation Sign Ins</span>
+            <span className="text-xs font-semibold text-foreground tracking-wide">
+              Presentation Sign Ins
+            </span>
             {notesExpanded ? (
               <ChevronUp className="size-3.5 text-muted-foreground" />
             ) : (
               <ChevronDown className="size-3.5 text-muted-foreground" />
             )}
           </button>
+
           {notesExpanded && (
             <div className="p-3 flex flex-col gap-2">
               {demoAccounts.map((account) => (
@@ -93,6 +113,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         </div>
 
+        {/* Backend status badge */}
+        <div className="mb-3 flex items-center justify-center">
+          <div className="text-xs px-2 py-1 rounded-md border border-border bg-card">
+            Backend:{" "}
+            {backendOk === null ? (
+              <span className="text-muted-foreground">checking…</span>
+            ) : backendOk ? (
+              <span className="font-medium">connected</span>
+            ) : (
+              <span className="font-medium">disconnected</span>
+            )}
+          </div>
+        </div>
+
         <Card className="w-full max-w-sm border-border/60">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg font-heading font-semibold text-foreground text-center">
@@ -117,6 +151,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   className="h-10"
                 />
               </div>
+
               <div className="flex flex-col gap-2">
                 <Label htmlFor="password" className="text-sm font-medium text-foreground">
                   Password
@@ -133,9 +168,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   className="h-10"
                 />
               </div>
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
+
+              {error && <p className="text-sm text-destructive">{error}</p>}
+
               <Button
                 type="submit"
                 className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90"
