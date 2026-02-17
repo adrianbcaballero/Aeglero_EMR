@@ -10,7 +10,12 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = config.SECRET_KEY
 
-    CORS(app, origins=config.CORS_ORIGINS)
+    origins = config.CORS_ORIGINS
+    if isinstance(origins, str):
+        origins = [o.strip() for o in origins.split(",") if o.strip()]
+
+    CORS(app, origins=origins)
+
 
     db.init_app(app)
 
