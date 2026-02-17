@@ -108,7 +108,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <Brain className="size-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold font-heading tracking-tight text-foreground">Aeglero</h1>
+            <h1 className="text-2xl font-bold font-heading tracking-tight text-foreground">Aeglero EMR</h1>
             <p className="text-xs text-muted-foreground">Mental Health EMR</p>
           </div>
         </div>
