@@ -3,7 +3,7 @@ from sqlalchemy import or_
 
 from auth_middleware import require_auth
 from extensions import db
-from models import Patient, User
+from models import Patient, User, ClinicalNote, TreatmentPlan
 
 from datetime import date
 import re
@@ -78,10 +78,39 @@ def _serialize_patient(p: Patient):
         "insurance": p.insurance,
         "riskLevel": p.risk_level,
         "assignedProvider": provider_name,
+    }
 
-        #appointments are not being implemented
-        "lastVisit": None,
-        "nextAppointment": None,
+def _serialize_note(n: ClinicalNote):
+    updated = getattr(n, "updated_at", None)
+    return {
+        "id": n.id,
+        "patientId": n.patient_id,
+        "providerId": n.provider_id,
+        "noteType": n.note_type,
+        "status": n.status,
+        "summary": n.summary,
+        "diagnosis": n.diagnosis,
+        "createdAt": n.created_at.isoformat() if n.created_at else None,
+        "updatedAt": (
+            updated.isoformat()
+            if updated
+            else (n.created_at.isoformat() if n.created_at else None)
+        ),
+    }
+
+def _serialize_treatment_plan(tp: TreatmentPlan):
+    created = getattr(tp, "created_at", None)
+    updated = getattr(tp, "updated_at", None)
+
+    return {
+        "id": tp.id,
+        "patientId": tp.patient_id,
+        "startDate": tp.start_date.isoformat() if tp.start_date else None,
+        "reviewDate": tp.review_date.isoformat() if tp.review_date else None,
+        "goals": tp.goals,
+        "status": tp.status,
+        "createdAt": created.isoformat() if created else None,
+        "updatedAt": updated.isoformat() if updated else None,
     }
 
 
@@ -140,30 +169,47 @@ def get_patient(patient_id):
     - /api/patients/PT-001
     - /api/patients/1 (numeric db id)
     """
-    p = None
+    ip = _client_ip()
 
-    # If it looks numeric, try db PK
+    p = None
     if patient_id.isdigit():
         p = Patient.query.get(int(patient_id))
 
-    # Otherwise (or fallback), treat as patient_code
     if not p:
         p = Patient.query.filter_by(patient_code=patient_id).first()
 
     if not p:
+        log_access(g.user.id, "PATIENT_GET", f"patient/{patient_id}", "FAILED", ip)
         return {"error": "patient not found"}, 404
 
-    # RBAC check: technician can only access assigned patient
-    if g.user.role == "technician" and p.assigned_provider_id != g.user.id:
-        return {"error": "forbidden"}, 403
+    if g.user.role == "technician":
+        if not p.assigned_provider_id or p.assigned_provider_id != g.user.id:
+            log_access(g.user.id, "PATIENT_GET", f"patient/{p.patient_code}", "FAILED", ip)
+            return {"error": "forbidden"}, 403
 
-    # appointments are not being implemented
+    notes = (
+        ClinicalNote.query
+        .filter_by(patient_id=p.id)
+        .order_by(ClinicalNote.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    tp = (
+        TreatmentPlan.query
+        .filter_by(patient_id=p.id)
+        .order_by(TreatmentPlan.id.desc())
+        .first()
+    )
+
+    log_access(g.user.id, "PATIENT_GET", f"patient/{p.patient_code}", "SUCCESS", ip)
+
     return {
         **_serialize_patient(p),
-        "appointments": [],
-        "notes": [],
-        "treatmentPlan": None,
+        "notes": [_serialize_note(n) for n in notes],
+        "treatmentPlan": _serialize_treatment_plan(tp) if tp else None,
     }, 200
+
 
 
 @patients_bp.post("")

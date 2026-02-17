@@ -153,6 +153,7 @@ def create_note(patient_id):
     except Exception:
         db.session.rollback()
         log_access(g.user.id, "RISK_SCORE_UPDATE", f"patient/{p.patient_code}", "FAILED", ip)
+        return {"error": "risk scoring failed"}, 500
 
 
 
@@ -175,7 +176,7 @@ def get_treatment_plan(patient_id):
     tp = TreatmentPlan.query.filter_by(patient_id=p.id).first()
 
     log_access(g.user.id, "TREATMENTPLAN_GET", f"patient/{p.patient_code}/treatment-plan", "SUCCESS", ip)
-    return (_serialize_plan(tp) if tp else None), 200
+    return {"treatmentPlan": _serialize_plan(tp) if tp else None}, 200
 
 
 @clinical_bp.post("/<patient_id>/treatment-plan")
