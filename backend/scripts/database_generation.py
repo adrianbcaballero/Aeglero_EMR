@@ -4,7 +4,6 @@ import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 
-from backend.routes import patients
 
 # Ensure imports work when running from /app/scripts
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -113,7 +112,6 @@ def seed():
                     summary=f"Patient update for {p.patient_code}.",
                     diagnosis=p.primary_diagnosis or "unspecified",
                     created_at=created,
-                    updated_at=created,
                 )
                 db.session.add(n)
 
@@ -131,7 +129,6 @@ def seed():
                         {"goal": "Improve daily routine", "target": "2 weeks"},
                     ],
                     status="active",
-                    created_at=now,
                     updated_at=now,
                 )
                 db.session.add(tp)
@@ -141,7 +138,7 @@ def seed():
 
         print("Seed complete: 3 users + 10 patients + audit logs created.")
         print("Login users: psychiatrist1 / technician1 / admin1")
-        print("Password for all: Password123!")
+        print("Password for all: password123!")
         print("Patient Notes and Treatment Plans created with random data for testing created.")
 
 if __name__ == "__main__":
