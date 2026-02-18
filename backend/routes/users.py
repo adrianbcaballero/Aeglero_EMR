@@ -80,9 +80,11 @@ def reset_password(user_id: int):
     data = request.get_json(silent=True) or {}
     new_password = data.get("new_password")
 
-    if not new_password or not isinstance(new_password, str) or len(new_password) < 8:
+    from services.password_validator import validate_password
+    is_valid, error_msg = validate_password(new_password)
+    if not is_valid:
         log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{user_id}", "FAILED", ip)
-        return {"error": "new_password is required (min 8 chars)"}, 400
+        return {"error": error_msg}, 400
 
     u = User.query.get(user_id)
     if not u:
