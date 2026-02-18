@@ -16,7 +16,7 @@ import { HelpView } from "@/components/help-view"
 import { HIPAAComplianceGuidelines } from "@/components/hipaa-compliance-guidelines"
 import { Separator } from "@/components/ui/separator"
 import { setSessionToken, logout as apiLogout } from "@/lib/api"
-import { LoginResponse } from "@/lib/api"
+import { SessionTimeout } from "@/components/session-timeout"
 
 import {
   Breadcrumb,
@@ -88,6 +88,15 @@ export default function EHRApp() {
 
   return (
     <SidebarProvider>
+      <SessionTimeout
+        timeoutMinutes={15}
+        warningSeconds={60}
+        onTimeout={() => {
+          setIsLoggedIn(false)
+          setActiveItem("Dashboard")
+          setNavOptions(null)
+        }}
+      />
       <AppSidebar
         activeItem={activeItem}
         onNavigate={handleSidebarNavigate}

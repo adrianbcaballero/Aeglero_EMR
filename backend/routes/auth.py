@@ -52,6 +52,9 @@ def _validate_session(session_id: str):
     if not user:
         return None, None
 
+    sess.expires_at = datetime.now(timezone.utc) + timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
+    db.session.commit()
+    
     return user, sess
 
 
