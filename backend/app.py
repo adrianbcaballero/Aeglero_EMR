@@ -41,6 +41,18 @@ def create_app():
     with app.app_context():
         db.create_all()
 
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains" # use only over HTTPS in production
+        response.headers["X-Content-Type-Options"] = "nosniff" #prvent browser from reading response as different MIME type (script as a image)
+        response.headers["X-Frame-Options"] = "DENY" # prevent clickjacking
+        response.headers["X-XSS-Protection"] = "1; mode=block" # enable basic XSS protection in older browsers (modern browsers use CSP instead)
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'" # restrict all content to same origin, prevent framing
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin" # Strips the header down if navigating to a different origin, but sends full URL when navigating within the same origin. This is a good balance between privacy and functionality for an EMR.
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate" # prevent caching of sensitive data
+        response.headers["Pragma"] = "no-cache" # HTTP 1.0 backward compatibility for no-cache
+        return response
+
     @app.get("/health")
     def health():
         return {"ok": True}
