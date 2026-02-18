@@ -1,21 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Search,
-  Plus,
   UserCog,
   Shield,
   CheckCircle2,
-  Clock,
+  Lock,
+  Unlock,
   MoreHorizontal,
-  Mail,
+  Loader2,
+  AlertTriangle,
+  KeyRound,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -31,127 +34,99 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
-interface SystemUser {
-  id: string
-  name: string
-  email: string
-  role: "admin" | "psychiatrist" | "therapist" | "counselor" | "intern" | "billing"
-  status: "active" | "inactive" | "pending"
-  lastLogin: string
-  department: string
-}
-
-const systemUsers: SystemUser[] = [
-  {
-    id: "USR-001",
-    name: "Dr. Emily Chen",
-    email: "e.chen@aeglero.com",
-    role: "psychiatrist",
-    status: "active",
-    lastLogin: "2026-02-10 08:45",
-    department: "Clinical",
-  },
-  {
-    id: "USR-002",
-    name: "Dr. Michael Torres",
-    email: "m.torres@aeglero.com",
-    role: "therapist",
-    status: "active",
-    lastLogin: "2026-02-10 08:52",
-    department: "Clinical",
-  },
-  {
-    id: "USR-003",
-    name: "Dr. Lisa Hoffman",
-    email: "l.hoffman@aeglero.com",
-    role: "psychiatrist",
-    status: "active",
-    lastLogin: "2026-02-10 09:31",
-    department: "Clinical",
-  },
-  {
-    id: "USR-004",
-    name: "Sarah Williams",
-    email: "s.williams@aeglero.com",
-    role: "admin",
-    status: "active",
-    lastLogin: "2026-02-10 07:30",
-    department: "Administration",
-  },
-  {
-    id: "USR-005",
-    name: "J. Rivera",
-    email: "j.rivera@aeglero.com",
-    role: "counselor",
-    status: "active",
-    lastLogin: "2026-02-09 16:20",
-    department: "Clinical",
-  },
-  {
-    id: "USR-006",
-    name: "Karen Phillips",
-    email: "k.phillips@aeglero.com",
-    role: "billing",
-    status: "active",
-    lastLogin: "2026-02-10 09:22",
-    department: "Billing",
-  },
-  {
-    id: "USR-007",
-    name: "Alex Nguyen",
-    email: "a.nguyen@aeglero.com",
-    role: "intern",
-    status: "active",
-    lastLogin: "2026-02-09 14:10",
-    department: "Clinical",
-  },
-  {
-    id: "USR-008",
-    name: "Dr. Patricia Moore",
-    email: "p.moore@aeglero.com",
-    role: "therapist",
-    status: "inactive",
-    lastLogin: "2026-01-15 10:00",
-    department: "Clinical",
-  },
-  {
-    id: "USR-009",
-    name: "Derek Simmons",
-    email: "d.simmons@aeglero.com",
-    role: "counselor",
-    status: "pending",
-    lastLogin: "",
-    department: "Clinical",
-  },
-]
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { getUsers, unlockUser, resetUserPassword } from "@/lib/api"
+import type { SystemUser } from "@/lib/api"
 
 const roleColors: Record<string, string> = {
   admin: "bg-destructive/10 text-destructive",
   psychiatrist: "bg-primary/10 text-primary",
-  therapist: "bg-accent/10 text-accent",
-  counselor: "bg-chart-4/10 text-chart-4",
-  intern: "bg-muted text-muted-foreground",
-  billing: "bg-primary/10 text-primary",
+  technician: "bg-accent/10 text-accent",
 }
 
-const statusColors: Record<string, string> = {
-  active: "bg-accent/10 text-accent",
-  inactive: "bg-muted text-muted-foreground",
-  pending: "bg-chart-4/10 text-chart-4",
+function getInitials(user: SystemUser): string {
+  if (user.full_name) {
+    return user.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+  }
+  return user.username.slice(0, 2).toUpperCase()
 }
 
 export function ManageUsersView() {
+  const [users, setUsers] = useState<SystemUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [resetDialogUser, setResetDialogUser] = useState<SystemUser | null>(null)
+  const [newPassword, setNewPassword] = useState("")
+  const [resetError, setResetError] = useState("")
+  const [resetLoading, setResetLoading] = useState(false)
 
-  const filteredUsers = systemUsers.filter((user) =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const fetchUsers = () => {
+    setLoading(true)
+    setError("")
+    getUsers()
+      .then(setUsers)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }
 
-  const activeCount = systemUsers.filter((u) => u.status === "active").length
-  const totalRoles = new Set(systemUsers.map((u) => u.role)).size
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const handleUnlock = async (userId: number) => {
+    setActionLoading(userId)
+    try {
+      await unlockUser(userId)
+      fetchUsers()
+    } catch {
+      // silently fail, user can retry
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleResetPassword = async () => {
+    if (!resetDialogUser || !newPassword || newPassword.length < 8) {
+      setResetError("Password must be at least 8 characters")
+      return
+    }
+
+    setResetLoading(true)
+    setResetError("")
+
+    try {
+      await resetUserPassword(resetDialogUser.id, newPassword)
+      setResetDialogUser(null)
+      setNewPassword("")
+      fetchUsers()
+    } catch (err: unknown) {
+      setResetError(err instanceof Error ? err.message : "Failed to reset password")
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const filteredUsers = users.filter((user) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      user.username.toLowerCase().includes(q) ||
+      (user.full_name || "").toLowerCase().includes(q) ||
+      user.role.toLowerCase().includes(q)
+    )
+  })
+
+  const activeCount = users.filter((u) => !u.is_locked).length
+  const lockedCount = users.filter((u) => u.is_locked).length
+  const totalRoles = new Set(users.map((u) => u.role)).size
 
   return (
     <div className="flex flex-col gap-6">
@@ -160,13 +135,9 @@ export function ManageUsersView() {
         <div>
           <h1 className="text-2xl font-bold font-heading tracking-tight text-foreground">Manage Users</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            System users, roles, and access management
+            User accounts, lockout status, and access management
           </p>
         </div>
-        <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="mr-2 size-4" />
-          Add User
-        </Button>
       </div>
 
       {/* Stats */}
@@ -177,7 +148,7 @@ export function ManageUsersView() {
               <UserCog className="size-3.5 text-foreground" />
               <p className="text-xs text-muted-foreground font-medium">Total Users</p>
             </div>
-            <p className="text-xl font-bold font-heading text-foreground">{systemUsers.length}</p>
+            <p className="text-xl font-bold font-heading text-foreground">{users.length}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60">
@@ -192,12 +163,10 @@ export function ManageUsersView() {
         <Card className="border-border/60">
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 mb-1">
-              <Clock className="size-3.5 text-chart-4" />
-              <p className="text-xs text-muted-foreground font-medium">Pending</p>
+              <Lock className="size-3.5 text-destructive" />
+              <p className="text-xs text-muted-foreground font-medium">Locked</p>
             </div>
-            <p className="text-xl font-bold font-heading text-chart-4">
-              {systemUsers.filter((u) => u.status === "pending").length}
-            </p>
+            <p className="text-xl font-bold font-heading text-destructive">{lockedCount}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60">
@@ -217,7 +186,7 @@ export function ManageUsersView() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search users by name, email, or role..."
+              placeholder="Search users by name, username, or role..."
               className="pl-9"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -226,85 +195,177 @@ export function ManageUsersView() {
         </CardContent>
       </Card>
 
+      {/* Loading / Error */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {error && (
+        <div className="text-center py-8">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button variant="outline" className="mt-3 bg-transparent text-foreground" onClick={fetchUsers}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Users Table */}
-      <Card className="border-border/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-heading font-semibold text-foreground">
-            All Users ({filteredUsers.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs font-semibold text-muted-foreground">User</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground hidden md:table-cell">Role</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground hidden lg:table-cell">Department</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground hidden md:table-cell">Last Login</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="size-8">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                          {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{user.name}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Mail className="size-3" />
-                          {user.email}
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <Badge variant="secondary" className={`text-[10px] capitalize ${roleColors[user.role]}`}>
-                      {user.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <span className="text-sm text-muted-foreground">{user.department}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className={`text-[10px] capitalize ${statusColors[user.status]}`}>
-                      {user.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <span className="text-xs text-muted-foreground">{user.lastLogin || "Never"}</span>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8">
-                          <MoreHorizontal className="size-4" />
-                          <span className="sr-only">Open menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Edit User</DropdownMenuItem>
-                        <DropdownMenuItem>Change Role</DropdownMenuItem>
-                        <DropdownMenuItem>Reset Password</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
-                          Deactivate
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+      {!loading && !error && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-heading font-semibold text-foreground">
+              All Users ({filteredUsers.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold text-muted-foreground">User</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground hidden md:table-cell">Role</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground">Status</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground hidden md:table-cell">Failed Attempts</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground hidden lg:table-cell">Locked Until</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground w-10" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="size-8">
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                            {getInitials(user)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {user.full_name || user.username}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{user.username}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <Badge variant="secondary" className={`text-[10px] capitalize ${roleColors[user.role] || "bg-muted text-muted-foreground"}`}>
+                        {user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {user.is_locked ? (
+                        <Badge variant="secondary" className="text-[10px] bg-destructive/10 text-destructive">
+                          <Lock className="mr-1 size-3" />
+                          Locked
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px] bg-accent/10 text-accent">
+                          Active
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <span className={`text-sm ${user.failed_attempts > 0 ? "text-chart-4 font-medium" : "text-muted-foreground"}`}>
+                        {user.failed_attempts}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <span className="text-xs text-muted-foreground">
+                        {user.locked_until ? new Date(user.locked_until).toLocaleString() : "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-8">
+                            <MoreHorizontal className="size-4" />
+                            <span className="sr-only">Open menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {user.is_locked && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={() => handleUnlock(user.id)}
+                                disabled={actionLoading === user.id}
+                              >
+                                <Unlock className="mr-2 size-4" />
+                                {actionLoading === user.id ? "Unlocking…" : "Unlock Account"}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setResetDialogUser(user)
+                              setNewPassword("")
+                              setResetError("")
+                            }}
+                          >
+                            <KeyRound className="mr-2 size-4" />
+                            Reset Password
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredUsers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
+                      No users found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetDialogUser} onOpenChange={(open) => { if (!open) setResetDialogUser(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-foreground">Reset Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {resetDialogUser?.full_name || resetDialogUser?.username}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">New Password</Label>
+              <Input
+                type="password"
+                placeholder="Minimum 8 characters"
+                value={newPassword}
+                onChange={(e) => { setNewPassword(e.target.value); setResetError("") }}
+                disabled={resetLoading}
+              />
+            </div>
+            {resetError && <p className="text-sm text-destructive">{resetError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="bg-transparent text-foreground"
+                onClick={() => setResetDialogUser(null)}
+                disabled={resetLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleResetPassword}
+                disabled={resetLoading}
+              >
+                {resetLoading ? "Resetting…" : "Reset Password"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

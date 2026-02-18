@@ -48,6 +48,21 @@ export async function apiPost<T>(path: string, data?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiPut<T>(path: string, data?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: data ? JSON.stringify(data) : undefined,
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `PUT ${path} failed: ${res.status}`)
+  }
+
+  return res.json() as Promise<T>
+}
+
 export function getHealth() {
   return apiGet<{ ok: boolean }>("/health");
 }
@@ -183,3 +198,29 @@ export function getAuditStats() {
   return apiGet<AuditStats>("/api/audit/stats")
 }
 
+
+// User management API calls
+export interface SystemUser {
+  id: number
+  username: string
+  role: string
+  full_name: string | null
+  failed_attempts: number
+  is_locked: boolean
+  locked_until: string | null
+  last_login: string | null
+}
+
+export function getUsers() {
+  return apiGet<SystemUser[]>("/api/users")
+}
+
+export function unlockUser(userId: number) {
+  return apiPost<{ ok: boolean; user: SystemUser }>(`/api/users/${userId}/unlock`)
+}
+
+export function resetUserPassword(userId: number, newPassword: string) {
+  return apiPut<{ ok: boolean }>(`/api/users/${userId}/reset-password`, {
+    new_password: newPassword,
+  })
+}
