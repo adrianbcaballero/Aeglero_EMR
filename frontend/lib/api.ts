@@ -135,3 +135,51 @@ export interface PatientDetail extends Patient {
   notes: ClinicalNote[]
   treatmentPlan: TreatmentPlanData | null
 }
+
+
+// Admin audit API calls
+export interface AuditLogEntry {
+  id: number
+  timestamp: string
+  userId: number | null
+  username: string | null
+  action: string
+  resource: string
+  ipAddress: string | null
+  status: string
+}
+
+export interface AuditLogsResponse {
+  total: number
+  nextBeforeId: number | null
+  items: AuditLogEntry[]
+}
+
+export interface AuditStats {
+  total_logins_today: number
+  failed_logins_today: number
+  not_authenticated_today: number
+  unauthorized_attempts_today: number
+  server_errors_today: number
+  active_sessions: number
+}
+
+export function getAuditLogs(params?: {
+  action?: string
+  status?: string
+  limit?: number
+  before_id?: number
+}) {
+  const query = new URLSearchParams()
+  if (params?.action) query.set("action", params.action)
+  if (params?.status) query.set("status", params.status)
+  if (params?.limit) query.set("limit", String(params.limit))
+  if (params?.before_id) query.set("before_id", String(params.before_id))
+  const qs = query.toString()
+  return apiGet<AuditLogsResponse>(`/api/audit/logs${qs ? `?${qs}` : ""}`)
+}
+
+export function getAuditStats() {
+  return apiGet<AuditStats>("/api/audit/stats")
+}
+
