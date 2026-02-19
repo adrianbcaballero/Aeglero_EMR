@@ -184,12 +184,16 @@ export function getAuditLogs(params?: {
   status?: string
   limit?: number
   before_id?: number
+  date_from?: string
+  date_to?: string
 }) {
   const query = new URLSearchParams()
   if (params?.action) query.set("action", params.action)
   if (params?.status) query.set("status", params.status)
   if (params?.limit) query.set("limit", String(params.limit))
   if (params?.before_id) query.set("before_id", String(params.before_id))
+  if (params?.date_from) query.set("date_from", params.date_from)
+  if (params?.date_to) query.set("date_to", params.date_to)
   const qs = query.toString()
   return apiGet<AuditLogsResponse>(`/api/audit/logs${qs ? `?${qs}` : ""}`)
 }
@@ -227,4 +231,39 @@ export function resetUserPassword(userId: number, newPassword: string) {
 
 export function getDashboardPatients() {
   return apiGet<Patient[]>("/api/patients")
+}
+
+// Audit export — returns a file download
+export async function exportAuditLogs(params?: {
+  status?: string
+  date_from?: string
+  date_to?: string
+}) {
+  const query = new URLSearchParams()
+  if (params?.status) query.set("status", params.status)
+  if (params?.date_from) query.set("date_from", params.date_from)
+  if (params?.date_to) query.set("date_to", params.date_to)
+  const qs = query.toString()
+  const url = `${API_BASE_URL}/api/audit/export${qs ? `?${qs}` : ""}`
+
+  // Use fetch with auth header, then trigger download
+  return fetch(url, {
+    method: "GET",
+    headers: authHeaders(),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `Export failed: ${res.status}`)
+    }
+    const blob = await res.blob()
+    const disposition = res.headers.get("Content-Disposition") || ""
+    const match = disposition.match(/filename=(.+)/)
+    const filename = match ? match[1] : "audit_logs.csv"
+
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(a.href)
+  })
 }

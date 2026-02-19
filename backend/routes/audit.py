@@ -180,3 +180,68 @@ def get_audit_stats():
         "server_errors_today": server_errors_today,
         "active_sessions": active_sessions,
     }, 200
+
+
+@audit_bp.get("/export")
+@require_auth(roles=["admin"])
+def export_audit_logs():
+    """
+    GET /api/audit/export?status=...&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
+    Returns CSV file download
+    """
+    import csv
+    import io
+    from flask import Response
+
+    ip = _client_ip()
+
+    status = (request.args.get("status") or "").strip()
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+
+    q = db.session.query(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id)
+
+    if status:
+        q = q.filter(AuditLog.status == status)
+
+    dt_from = _parse_date(date_from)
+    dt_to = _parse_date(date_to)
+
+    if dt_from == "INVALID" or dt_to == "INVALID":
+        log_access(g.user.id, "AUDIT_EXPORT", "audit/export", "FAILED", ip)
+        return {"error": "date_from/date_to must be YYYY-MM-DD"}, 400
+
+    if dt_from:
+        q = q.filter(AuditLog.timestamp >= dt_from)
+    if dt_to:
+        q = q.filter(AuditLog.timestamp < (dt_to + timedelta(days=1)))
+
+    rows = q.order_by(AuditLog.id.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Timestamp", "User ID", "Username", "Action", "Resource", "IP Address", "Status"])
+
+    for log, username in rows:
+        writer.writerow([
+            log.id,
+            log.timestamp.isoformat() if log.timestamp else "",
+            log.user_id or "",
+            username or "",
+            log.action,
+            log.resource,
+            log.ip_address or "",
+            log.status,
+        ])
+
+    csv_data = output.getvalue()
+    output.close()
+
+    filename = f"audit_logs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+
+    log_access(g.user.id, "AUDIT_EXPORT", "audit/export", "SUCCESS", ip)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

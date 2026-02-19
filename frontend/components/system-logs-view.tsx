@@ -14,6 +14,7 @@ import {
   Loader2,
   LogIn,
   Activity,
+  Download,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -27,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { getAuditLogs, getAuditStats } from "@/lib/api"
+import { getAuditLogs, getAuditStats, exportAuditLogs } from "@/lib/api"
 import type { AuditLogEntry, AuditStats } from "@/lib/api"
 
 // Map action/status to visual styles
@@ -176,13 +177,31 @@ export function SystemLogsView() {
   const [beforeId, setBeforeId] = useState<number | undefined>(undefined)
   const [pageHistory, setPageHistory] = useState<(number | undefined)[]>([])
 
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = () => {
+    setExporting(true)
+    const params: { status?: string; date_from?: string; date_to?: string } = {}
+    if (statusFilter) params.status = statusFilter
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo) params.date_to = dateTo
+
+    exportAuditLogs(params)
+      .catch(() => {})
+      .finally(() => setExporting(false))
+  }
+
   const fetchLogs = (cursorBeforeId?: number) => {
     setLoading(true)
     setError("")
 
-    const params: { status?: string; limit?: number; before_id?: number } = { limit: PAGE_SIZE }
+    const params: { status?: string; limit?: number; before_id?: number; date_from?: string; date_to?: string } = { limit: PAGE_SIZE }
     if (statusFilter) params.status = statusFilter
     if (cursorBeforeId) params.before_id = cursorBeforeId
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo) params.date_to = dateTo
 
     getAuditLogs(params)
       .then((logsRes) => {
@@ -204,7 +223,7 @@ export function SystemLogsView() {
     setPageHistory([])
     fetchLogs()
     fetchStats()
-  }, [statusFilter])
+  }, [statusFilter, dateFrom, dateTo])
 
   const handleNextPage = () => {
     if (logs.length === 0) return
@@ -260,6 +279,15 @@ export function SystemLogsView() {
             HIPAA audit trail — all system access events
           </p>
         </div>
+        <Button
+          variant="outline"
+          className="border-border text-foreground bg-transparent"
+          onClick={handleExport}
+          disabled={exporting}
+        >
+          <Download className="mr-2 size-4" />
+          {exporting ? "Exporting…" : "Export CSV"}
+        </Button>
       </div>
 
       {/* Stats from real API */}
@@ -345,6 +373,20 @@ export function SystemLogsView() {
                 <SelectItem value="FAILED">Failed</SelectItem>
               </SelectContent>
             </Select>
+            <Input
+              type="date"
+              className="w-full sm:w-40"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              placeholder="From date"
+            />
+            <Input
+              type="date"
+              className="w-full sm:w-40"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              placeholder="To date"
+            />
           </div>
         </CardContent>
       </Card>
