@@ -8,6 +8,7 @@ from extensions import db
 import config
 from models import User, UserSession
 from services.audit_logger import log_access
+from services.rate_limiter import login_limiter
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -68,6 +69,14 @@ def login():
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
     ip = _client_ip()
+
+    if login_limiter.is_rate_limited(ip):
+        log_access(None, "LOGIN", "auth", "FAILED", ip)
+        remaining = login_limiter.remaining(ip)
+        return {
+            "error": "Too many login attempts. Please wait 60 seconds.",
+            "retry_after": 60,
+        }, 429
 
     if not username or not password:
         log_access(None, "LOGIN", "auth", "FAILED", ip)
