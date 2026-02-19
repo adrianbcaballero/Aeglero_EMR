@@ -224,3 +224,7 @@ export function resetUserPassword(userId: number, newPassword: string) {
     new_password: newPassword,
   })
 }
+
+export function getDashboardPatients() {
+  return apiGet<Patient[]>("/api/patients")
+}
