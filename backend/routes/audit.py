@@ -77,12 +77,6 @@ def get_audit_logs():
             log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
             return {"error": "user_id must be an integer"}, 400
         
-    if before_id:
-        try:
-            q = q.filter(AuditLog.id < int(before_id))
-        except ValueError:
-            log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
-            return {"error": "before_id must be an integer"}, 400
 
     if action:
         q = q.filter(AuditLog.action == action)
@@ -107,6 +101,12 @@ def get_audit_logs():
         q = q.filter(AuditLog.timestamp < (dt_to + timedelta(days=1)))
 
     total = q.count()
+    if before_id:
+        try:
+            q = q.filter(AuditLog.id < int(before_id))
+        except ValueError:
+            log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
+            return {"error": "before_id must be an integer"}, 400
 
     rows = (
         q.order_by(AuditLog.id.desc())

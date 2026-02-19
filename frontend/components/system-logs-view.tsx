@@ -415,7 +415,7 @@ export function SystemLogsView() {
               <CardTitle className="text-sm font-semibold text-foreground">
                 Audit Log ({filteredLogs.length} entries)
               </CardTitle>
-              {totalPages > 1 && (
+              {(hasPrevPage || hasNextPage) && (
                 <div className="flex items-center gap-3">
                   <p className="text-xs text-muted-foreground">
                     Page {currentPage} of {totalPages} ({total} total)
