@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Target,
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   ArrowLeft,
+  Loader2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,13 +36,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { treatmentPlans, patients } from "@/lib/data"
-import type { TreatmentPlan } from "@/lib/data"
+import { getPatients, getTreatmentPlan, getTreatmentPlans, upsertTreatmentPlan } from "@/lib/api"
+import type { Patient, TreatmentPlanListItem, TreatmentPlanGoal } from "@/lib/api"
 
-const goalStatusConfig: Record<
-  string,
-  { label: string; className: string; icon: React.ComponentType<{ className?: string }> }
-> = {
+interface GoalStatusEntry {
+  label: string
+  className: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+const goalStatusConfig: Record<string, GoalStatusEntry> = {
   met: {
     label: "Met",
     className: "bg-accent/10 text-accent",
@@ -65,18 +69,58 @@ const goalStatusConfig: Record<
 }
 
 // ------- New Plan Dialog -------
-function NewPlanDialog() {
+function NewPlanDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false)
+  const [patients, setPatients] = useState<Patient[]>([])
   const [patientId, setPatientId] = useState<string | undefined>(undefined)
-  const [title, setTitle] = useState("")
   const [startDate, setStartDate] = useState("")
   const [reviewDate, setReviewDate] = useState("")
   const [goalsText, setGoalsText] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (open) {
+      getPatients().then(setPatients).catch(() => {})
+    }
+  }, [open])
 
   const handleCreate = () => {
-    // lightweight demo behaviour: log the new plan
-    console.log("Create plan", { patientId, title, startDate, reviewDate, goalsText })
-    setOpen(false)
+    if (!patientId) {
+      setError("Please select a patient")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+
+    const goals: TreatmentPlanGoal[] = goalsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((desc, i) => ({
+        id: `goal-${i + 1}`,
+        description: desc,
+        status: "in-progress",
+        targetDate: reviewDate || "",
+      }))
+
+    upsertTreatmentPlan(patientId, {
+      startDate: startDate || undefined,
+      reviewDate: reviewDate || undefined,
+      goals,
+      status: "active",
+    })
+      .then(() => {
+        setOpen(false)
+        setPatientId(undefined)
+        setStartDate("")
+        setReviewDate("")
+        setGoalsText("")
+        onCreated()
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to create plan"))
+      .finally(() => setLoading(false))
   }
 
   return (
@@ -84,7 +128,7 @@ function NewPlanDialog() {
       <DialogTrigger asChild>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="mr-2 size-4" />
-          Treatment plan
+          Treatment Plan
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
@@ -93,43 +137,56 @@ function NewPlanDialog() {
           <DialogDescription>Fill out basic information to create a treatment plan.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
-          <div className="grid grid-cols-1 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm font-medium text-foreground">Patient</Label>
+            <Select onValueChange={(v) => setPatientId(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select patient" />
+              </SelectTrigger>
+              <SelectContent>
+                {patients.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.firstName} {p.lastName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-sm font-medium text-foreground">Patient</Label>
-              <Select onValueChange={(v) => setPatientId(v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select patient" />
-                </SelectTrigger>
-                <SelectContent>
-                  {patients.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{`${p.firstName} ${p.lastName}`}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-sm font-medium text-foreground">Start Date</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-sm font-medium text-foreground">Plan Title</Label>
-              <Input placeholder="Short title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-sm font-medium text-foreground">Start Date</Label>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-sm font-medium text-foreground">Review Date</Label>
-                <Input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-sm font-medium text-foreground">Goals (one per line)</Label>
-              <Textarea value={goalsText} onChange={(e) => setGoalsText(e.target.value)} placeholder="Improve sleep\nReduce panic attacks" />
+              <Label className="text-sm font-medium text-foreground">Review Date</Label>
+              <Input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} />
             </div>
           </div>
-
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm font-medium text-foreground">Goals (one per line)</Label>
+            <Textarea
+              value={goalsText}
+              onChange={(e) => setGoalsText(e.target.value)}
+              placeholder={"Improve sleep quality\nReduce panic attack frequency"}
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)} className="bg-transparent text-foreground">Cancel</Button>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleCreate}>Create</Button>
+            <Button
+              variant="outline"
+              onClick={() => setOpen(false)}
+              className="bg-transparent text-foreground"
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={handleCreate}
+              disabled={loading}
+            >
+              {loading ? "Creating…" : "Create"}
+            </Button>
           </div>
         </div>
       </DialogContent>
@@ -137,17 +194,45 @@ function NewPlanDialog() {
   )
 }
 
-// ------- Patient Plan Detail Page -------
+// ------- Plan Detail Page -------
 function PlanDetailPage({
-  plan,
+  plan: initialPlan,
   onBack,
 }: {
-  plan: TreatmentPlan
+  plan: TreatmentPlanListItem
   onBack: () => void
 }) {
-  const metGoals = plan.goals.filter((g) => g.status === "met").length
-  const totalGoals = plan.goals.length
+  const [plan, setPlan] = useState<TreatmentPlanListItem>(initialPlan)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getTreatmentPlan(initialPlan.patientCode)
+      .then((res) => {
+        if (res.treatmentPlan) {
+          setPlan({
+            ...res.treatmentPlan,
+            patientName: initialPlan.patientName,
+            patientCode: initialPlan.patientCode,
+            patientStatus: initialPlan.patientStatus,
+          })
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [initialPlan.patientCode])
+
+  const goals = plan.goals || []
+  const metGoals = goals.filter((g) => g.status === "met").length
+  const totalGoals = goals.length
   const progressPercent = totalGoals > 0 ? (metGoals / totalGoals) * 100 : 0
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -166,9 +251,7 @@ function PlanDetailPage({
           className={`ml-auto text-xs ${
             plan.status === "active"
               ? "bg-accent/10 text-accent"
-              : plan.status === "completed"
-                ? "bg-primary/10 text-primary"
-                : "bg-muted text-muted-foreground"
+              : "bg-muted text-muted-foreground"
           }`}
         >
           {plan.status}
@@ -198,7 +281,7 @@ function PlanDetailPage({
         <Card className="border-border/60">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Next Review</p>
-            <p className="text-sm font-medium text-foreground mt-1">{plan.reviewDate}</p>
+            <p className="text-sm font-medium text-foreground mt-1">{plan.reviewDate || "—"}</p>
           </CardContent>
         </Card>
       </div>
@@ -214,18 +297,18 @@ function PlanDetailPage({
         </CardContent>
       </Card>
 
-      {/* Date Info */}
+      {/* Dates */}
       <div className="grid grid-cols-2 gap-4">
         <Card className="border-border/60">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Start Date</p>
-            <p className="text-sm font-medium text-foreground mt-1">{plan.startDate}</p>
+            <p className="text-sm font-medium text-foreground mt-1">{plan.startDate || "—"}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Next Review</p>
-            <p className="text-sm font-medium text-foreground mt-1">{plan.reviewDate}</p>
+            <p className="text-sm font-medium text-foreground mt-1">{plan.reviewDate || "—"}</p>
           </CardContent>
         </Card>
       </div>
@@ -238,44 +321,38 @@ function PlanDetailPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-3">
-            {plan.goals.map((goal) => {
-              const config = goalStatusConfig[goal.status]
-              const StatusIcon = config.icon
-              return (
-                <div key={goal.id} className="p-4 border border-border rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 flex items-center justify-center size-6 rounded-full ${config.className}`}>
-                      <StatusIcon className="size-3.5" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-foreground leading-relaxed">{goal.description}</p>
-                      <div className="flex items-center justify-between mt-3">
-                        <Badge variant="secondary" className={`text-[10px] ${config.className}`}>
-                          {config.label}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Target: {goal.targetDate}
-                        </span>
+          {goals.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {goals.map((goal, index) => {
+                const config = goalStatusConfig[goal.status] || goalStatusConfig["in-progress"]
+                const StatusIcon = config.icon
+                return (
+                  <div key={goal.id || index} className="p-4 border border-border rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex items-center justify-center size-6 rounded-full ${config.className}`}>
+                        <StatusIcon className="size-3.5" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground leading-relaxed">{goal.description}</p>
+                        <div className="flex items-center justify-between mt-3">
+                          <Badge variant="secondary" className={`text-[10px] ${config.className}`}>
+                            {config.label}
+                          </Badge>
+                          {goal.targetDate && (
+                            <span className="text-xs text-muted-foreground">
+                              Target: {goal.targetDate}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <Separator className="my-4" />
-
-          <div className="flex items-center gap-2">
-            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Target className="mr-1.5 size-3.5" />
-              Update Goals
-            </Button>
-            <Button variant="outline" size="sm" className="bg-transparent">
-              Review Plan
-            </Button>
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">No goals defined yet.</p>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -288,26 +365,68 @@ export function TreatmentPlansView({
 }: {
   initialPatientId?: string
 }) {
+  const [plans, setPlans] = useState<TreatmentPlanListItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedPlan, setSelectedPlan] = useState<TreatmentPlanListItem | null>(null)
 
-  // Auto-select plan if navigated from dashboard with a patient ID
-  const initialPlan = initialPatientId
-    ? treatmentPlans.find((p) => p.patientId === initialPatientId) || null
-    : null
+  const fetchPlans = () => {
+    setLoading(true)
+    setError("")
+    getTreatmentPlans()
+      .then((data) => {
+        setPlans(data)
+        // Auto-select if navigated from dashboard with patient ID
+        if (initialPatientId && !selectedPlan) {
+          const match = data.find((p) => p.patientCode === initialPatientId)
+          if (match) setSelectedPlan(match)
+        }
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load"))
+      .finally(() => setLoading(false))
+  }
 
-  const [selectedPlan, setSelectedPlan] = useState<TreatmentPlan | null>(initialPlan)
+  useEffect(() => {
+    fetchPlans()
+  }, [])
 
-  const filteredPlans = treatmentPlans.filter((plan) =>
-    plan.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    plan.id.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredPlans = plans.filter((plan) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      plan.patientName.toLowerCase().includes(q) ||
+      plan.patientCode.toLowerCase().includes(q)
+    )
+  })
+
+  const activePlans = plans.filter((p) => p.status === "active").length
+  const totalGoals = plans.reduce((acc, p) => acc + (p.goals?.length || 0), 0)
+  const metGoals = plans.reduce(
+    (acc, p) => acc + (p.goals?.filter((g) => g.status === "met").length || 0),
+    0
   )
 
   if (selectedPlan) {
+    return <PlanDetailPage plan={selectedPlan} onBack={() => setSelectedPlan(null)} />
+  }
+
+  if (loading) {
     return (
-      <PlanDetailPage
-        plan={selectedPlan}
-        onBack={() => setSelectedPlan(null)}
-      />
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-sm text-destructive">{error}</p>
+        <Button variant="outline" className="mt-3 bg-transparent text-foreground" onClick={fetchPlans}>
+          Retry
+        </Button>
+      </div>
     )
   }
 
@@ -323,46 +442,33 @@ export function TreatmentPlansView({
             Track patient goals and treatment progress
           </p>
         </div>
-        <NewPlanDialog />
+        <NewPlanDialog onCreated={fetchPlans} />
       </div>
 
-      {/* Quick Stats */}
+      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="border-border/60">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground font-medium">Active Plans</p>
-            <p className="text-xl font-bold font-heading text-foreground">
-              {treatmentPlans.filter((p) => p.status === "active").length}
-            </p>
+            <p className="text-xl font-bold font-heading text-foreground">{activePlans}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground font-medium">Total Goals</p>
-            <p className="text-xl font-bold font-heading text-primary">
-              {treatmentPlans.reduce((acc, p) => acc + p.goals.length, 0)}
-            </p>
+            <p className="text-xl font-bold font-heading text-primary">{totalGoals}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground font-medium">Goals Met</p>
-            <p className="text-xl font-bold font-heading text-accent">
-              {treatmentPlans.reduce(
-                (acc, p) => acc + p.goals.filter((g) => g.status === "met").length,
-                0
-              )}
-            </p>
+            <p className="text-xl font-bold font-heading text-accent">{metGoals}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground font-medium">Due for Review</p>
-            <p className="text-xl font-bold font-heading text-chart-4">
-              {treatmentPlans.filter(
-                (p) => p.status === "active" && p.reviewDate <= "2026-02-15"
-              ).length}
-            </p>
+            <p className="text-xs text-muted-foreground font-medium">Total Plans</p>
+            <p className="text-xl font-bold font-heading text-foreground">{plans.length}</p>
           </CardContent>
         </Card>
       </div>
@@ -373,7 +479,7 @@ export function TreatmentPlansView({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search treatment plans by patient name or ID..."
+              placeholder="Search by patient name or ID..."
               className="pl-9"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -382,12 +488,13 @@ export function TreatmentPlansView({
         </CardContent>
       </Card>
 
-      {/* Patient plan cards - each clickable */}
+      {/* Plan Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPlans.map((plan) => {
-          const metGoals = plan.goals.filter((g) => g.status === "met").length
-          const totalGoals = plan.goals.length
-          const progressPercent = totalGoals > 0 ? (metGoals / totalGoals) * 100 : 0
+          const goals = plan.goals || []
+          const met = goals.filter((g) => g.status === "met").length
+          const total = goals.length
+          const pct = total > 0 ? (met / total) * 100 : 0
 
           return (
             <Card
@@ -399,16 +506,14 @@ export function TreatmentPlansView({
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">{plan.patientName}</h3>
-                    <p className="text-xs text-muted-foreground">{plan.id}</p>
+                    <p className="text-xs text-muted-foreground">{plan.patientCode}</p>
                   </div>
                   <Badge
                     variant="secondary"
                     className={`text-[10px] ${
                       plan.status === "active"
                         ? "bg-accent/10 text-accent"
-                        : plan.status === "completed"
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted text-muted-foreground"
+                        : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {plan.status}
@@ -418,22 +523,26 @@ export function TreatmentPlansView({
                 <div className="mt-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs text-muted-foreground">
-                      {metGoals} of {totalGoals} goals met
+                      {met} of {total} goals met
                     </span>
-                    <span className="text-xs font-medium text-foreground">{Math.round(progressPercent)}%</span>
+                    <span className="text-xs font-medium text-foreground">{Math.round(pct)}%</span>
                   </div>
-                  <Progress value={progressPercent} className="h-1.5" />
+                  <Progress value={pct} className="h-1.5" />
                 </div>
 
                 <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="size-3" />
-                    <span>Started {plan.startDate}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="size-3" />
-                    <span>Review {plan.reviewDate}</span>
-                  </div>
+                  {plan.startDate && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="size-3" />
+                      <span>Started {plan.startDate}</span>
+                    </div>
+                  )}
+                  {plan.reviewDate && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="size-3" />
+                      <span>Review {plan.reviewDate}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

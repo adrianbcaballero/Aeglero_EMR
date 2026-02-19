@@ -7,6 +7,7 @@ from extensions import db
 from models import Patient, User, ClinicalNote, TreatmentPlan
 from services.audit_logger import log_access
 from services.scoring import calculate_risk_level
+from sqlalchemy.orm.attributes import flag_modified
 
 clinical_bp = Blueprint("clinical", __name__, url_prefix="/api/patients")
 
@@ -228,8 +229,38 @@ def upsert_treatment_plan(patient_id):
     tp.review_date = review_date
     tp.goals = goals
     tp.status = status
+    flag_modified(tp, "goals")
 
     db.session.commit()
 
     log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "SUCCESS", ip)
     return {"created": created, "treatmentPlan": _serialize_plan(tp)}, 200
+
+
+@clinical_bp.get("/treatment-plans")
+@require_auth(roles=["technician", "psychiatrist", "admin"])
+def list_treatment_plans():
+    """
+    GET /api/patients/treatment-plans
+    Returns all treatment plans with patient info.
+    """
+    ip = _client_ip()
+
+    q = db.session.query(TreatmentPlan, Patient).join(Patient, Patient.id == TreatmentPlan.patient_id)
+
+    # RBAC: technicians only see assigned patients
+    if g.user.role == "technician":
+        q = q.filter(Patient.assigned_provider_id == g.user.id)
+
+    rows = q.order_by(Patient.last_name.asc()).all()
+
+    items = []
+    for tp, p in rows:
+        plan = _serialize_plan(tp)
+        plan["patientName"] = f"{p.first_name} {p.last_name}"
+        plan["patientCode"] = p.patient_code
+        plan["patientStatus"] = p.status
+        items.append(plan)
+
+    log_access(g.user.id, "TREATMENTPLAN_LIST", "treatment-plans", "SUCCESS", ip)
+    return items, 200
