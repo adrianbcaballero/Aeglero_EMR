@@ -117,3 +117,60 @@ class TreatmentPlan(db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False
     )
+
+
+class FormTemplate(db.Model):
+    __tablename__ = "form_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(50), nullable=False)  # intake, assessment, consent, insurance, clinical, discharge
+    description = db.Column(db.Text, nullable=True)
+
+    # JSON array: [{label, type, options?, min?, max?}]
+    # types: text, textarea, number, date, checkbox, checkbox_group, select, scale, signature
+    fields = db.Column(db.JSON, nullable=False, default=list)
+
+    # JSON array of role strings that can view forms created from this template
+    allowed_roles = db.Column(db.JSON, nullable=False, default=lambda: ["admin", "psychiatrist", "technician"])
+
+    status = db.Column(db.String(20), nullable=False, default="active")  # active/archived
+
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class PatientForm(db.Model):
+    __tablename__ = "patient_form"
+
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False, index=True)
+    template_id = db.Column(db.Integer, db.ForeignKey("form_template.id"), nullable=False, index=True)
+
+    # JSON object: {field_label: value}
+    form_data = db.Column(db.JSON, nullable=False, default=dict)
+
+    status = db.Column(db.String(20), nullable=False, default="draft")  # draft/completed
+
+    filled_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
