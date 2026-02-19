@@ -43,10 +43,10 @@ const allMainNavItems = [
 ]
 
 const adminNavItems = [
-  { title: "Workflows", icon: GitBranch },
-  { title: "Manage Users", icon: UserCog },
-  { title: "System Logs", icon: ScrollText },
-  { title: "Settings", icon: Settings },
+  { title: "Workflows", icon: GitBranch, roles: ["admin", "psychiatrist"] },
+  { title: "Manage Users", icon: UserCog, roles: ["admin"] },
+  { title: "System Logs", icon: ScrollText, roles: ["admin"] },
+  { title: "Settings", icon: Settings, roles: ["admin"] },
 ]
 
 const supportNavItems = [
@@ -75,7 +75,8 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeItem, onNavigate, onSignOut, userRole }: AppSidebarProps) {
   const mainNavItems = allMainNavItems.filter((item) => item.roles.includes(userRole))
-  const showAdmin = userRole === "admin"
+  const filteredAdminItems = adminNavItems.filter((item) => item.roles.includes(userRole))
+  const showAdmin = filteredAdminItems.length > 0
   const userInfo = roleUserNames[userRole] || { name: "User", initials: "U" }
 
   return (
@@ -135,7 +136,7 @@ export function AppSidebar({ activeItem, onNavigate, onSignOut, userRole }: AppS
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {adminNavItems.map((item) => (
+                  {filteredAdminItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={activeItem === item.title}

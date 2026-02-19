@@ -308,3 +308,94 @@ export function getTreatmentPlan(patientCode: string) {
     `/api/patients/${patientCode}/treatment-plan`
   )
 }
+
+
+// Form Templates
+export interface TemplateField {
+  label: string
+  type: string
+  options?: string[]
+  min?: number
+  max?: number
+}
+
+export interface FormTemplate {
+  id: number
+  name: string
+  category: string
+  description: string | null
+  fields: TemplateField[]
+  allowedRoles: string[]
+  status: string
+  createdBy: number | null
+  createdAt: string | null
+  updatedAt: string | null
+  instanceCount?: number
+}
+
+export interface PatientFormEntry {
+  id: number
+  patientId: number
+  templateId: number
+  templateName: string | null
+  templateCategory: string | null
+  formData: Record<string, unknown>
+  status: string
+  filledBy: number | null
+  filledByName: string | null
+  templateFields?: TemplateField[]
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export function getTemplates() {
+  return apiGet<FormTemplate[]>("/api/templates")
+}
+
+export function getTemplate(templateId: number) {
+  return apiGet<FormTemplate>(`/api/templates/${templateId}`)
+}
+
+export function createTemplate(data: {
+  name: string
+  category: string
+  description?: string
+  fields: TemplateField[]
+  allowedRoles: string[]
+}) {
+  return apiPost<FormTemplate>("/api/templates", data)
+}
+
+export function updateTemplate(templateId: number, data: {
+  name?: string
+  category?: string
+  description?: string
+  fields?: TemplateField[]
+  allowedRoles?: string[]
+  status?: string
+}) {
+  return apiPut<FormTemplate>(`/api/templates/${templateId}`, data)
+}
+
+export function getPatientForms(patientCode: string) {
+  return apiGet<PatientFormEntry[]>(`/api/patients/${patientCode}/forms`)
+}
+
+export function getPatientForm(patientCode: string, formId: number) {
+  return apiGet<PatientFormEntry>(`/api/patients/${patientCode}/forms/${formId}`)
+}
+
+export function createPatientForm(patientCode: string, data: {
+  templateId: number
+  formData: Record<string, unknown>
+  status?: string
+}) {
+  return apiPost<PatientFormEntry>(`/api/patients/${patientCode}/forms`, data)
+}
+
+export function updatePatientForm(patientCode: string, formId: number, data: {
+  formData?: Record<string, unknown>
+  status?: string
+}) {
+  return apiPut<PatientFormEntry>(`/api/patients/${patientCode}/forms/${formId}`, data)
+}
