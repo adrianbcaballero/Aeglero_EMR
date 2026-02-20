@@ -399,3 +399,19 @@ export function updatePatientForm(patientCode: string, formId: number, data: {
 }) {
   return apiPut<PatientFormEntry>(`/api/patients/${patientCode}/forms/${formId}`, data)
 }
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `DELETE ${path} failed: ${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
+export function deletePatientForm(patientCode: string, formId: number) {
+  return apiDelete<{ ok: boolean }>(`/api/patients/${patientCode}/forms/${formId}`)
+}

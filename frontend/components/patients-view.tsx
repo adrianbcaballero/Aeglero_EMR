@@ -23,8 +23,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { getPatients, getPatient, createPatient, getPatientForms, getPatientForm, updatePatientForm } from "@/lib/api"
-import type { Patient, PatientDetail, PatientFormEntry, TemplateField } from "@/lib/api"
+import { getPatients, getPatient, createPatient, getPatientForms, getPatientForm, createPatientForm, updatePatientForm, getTemplates} from "@/lib/api"
+import type { Patient, PatientDetail, PatientFormEntry, FormTemplate, TemplateField } from "@/lib/api"
 
 import {
   Table,
@@ -307,6 +307,99 @@ function FormDetailView({
   )
 }
 
+// ─── New Form Dialog ───
+function NewFormDialog({ patientCode, onCreated }: { patientCode: string; onCreated: (formId: number) => void }) {
+  const [open, setOpen] = useState(false)
+  const [templates, setTemplates] = useState<FormTemplate[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (open) {
+      getTemplates()
+        .then((t) => setTemplates(t.filter((tpl) => tpl.status === "active")))
+        .catch(() => {})
+    }
+  }, [open])
+
+  const handleCreate = () => {
+    if (!selectedTemplate) {
+      setError("Please select a form template")
+      return
+    }
+    setLoading(true)
+    setError("")
+    createPatientForm(patientCode, { templateId: parseInt(selectedTemplate), formData: {}, status: "draft" })
+      .then((form) => {
+        setOpen(false)
+        setSelectedTemplate("")
+        onCreated(form.id)
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to create"))
+      .finally(() => setLoading(false))
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="mr-1.5 size-3.5" /> Add Form
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-heading text-foreground">Add Form</DialogTitle>
+          <DialogDescription>Select a template to create a new form for this patient.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm font-medium text-foreground">Template</Label>
+            <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a form template" />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    <div className="flex items-center gap-2">
+                      <span>{t.name}</span>
+                      <span className="text-xs text-muted-foreground capitalize">({t.category})</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedTemplate && (() => {
+            const tpl = templates.find((t) => t.id === parseInt(selectedTemplate))
+            if (!tpl) return null
+            return (
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-sm font-medium text-foreground">{tpl.name}</p>
+                {tpl.description && <p className="text-xs text-muted-foreground mt-1">{tpl.description}</p>}
+                <p className="text-xs text-muted-foreground mt-1">{tpl.fields.length} fields</p>
+              </div>
+            )
+          })()}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)} className="bg-transparent text-foreground" disabled={loading}>
+              Cancel
+            </Button>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleCreate} disabled={loading}>
+              {loading ? "Creating…" : "Create Form"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ------- Patient Profile View -------
 function PatientProfileView({
   patientId,
@@ -462,9 +555,15 @@ function PatientProfileView({
       {/* Forms Table */}
       <Card className="border-border/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-heading font-semibold text-foreground">
-            Forms ({forms.length})
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-heading font-semibold text-foreground">
+              Forms ({forms.length})
+            </CardTitle>
+            <NewFormDialog
+              patientCode={patient.id}
+              onCreated={(formId) => { fetchForms(); setSelectedFormId(formId) }}
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loadingForms ? (
