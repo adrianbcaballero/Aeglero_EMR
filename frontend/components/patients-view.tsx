@@ -9,15 +9,19 @@ import {
   Users,
   AlertTriangle,
   Loader2,
-  X,
+  FileCheck,
+  FileClock,
+  ClipboardList,
+  CheckCircle2,
+  Clock,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { getPatients, getPatient, createPatient } from "@/lib/api"
-import type { Patient, PatientDetail } from "@/lib/api"
+import { getPatients, getPatient, createPatient, getPatientForms } from "@/lib/api"
+import type { Patient, PatientDetail, PatientFormEntry } from "@/lib/api"
 
 import {
   Table,
@@ -53,6 +57,17 @@ const riskColors: Record<string, string> = {
   high: "bg-destructive/10 text-destructive border-destructive/20",
 }
 
+interface FormStatusEntry {
+  icon: typeof CheckCircle2
+  color: string
+  label: string
+}
+
+const formStatusConfig: Record<string, FormStatusEntry> = {
+  completed: { icon: CheckCircle2, color: "bg-accent/10 text-accent border-accent/20", label: "Completed" },
+  draft: { icon: Clock, color: "bg-chart-4/10 text-chart-4 border-chart-4/20", label: "Draft" },
+}
+
 // ------- Patient Profile View -------
 function PatientProfileView({
   patientId,
@@ -62,7 +77,9 @@ function PatientProfileView({
   onBack: () => void
 }) {
   const [patient, setPatient] = useState<PatientDetail | null>(null)
+  const [forms, setForms] = useState<PatientFormEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingForms, setLoadingForms] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
@@ -72,6 +89,18 @@ function PatientProfileView({
       .then(setPatient)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
+  }, [patientId])
+
+  const fetchForms = () => {
+    setLoadingForms(true)
+    getPatientForms(patientId)
+      .then(setForms)
+      .catch(() => {})
+      .finally(() => setLoadingForms(false))
+  }
+
+  useEffect(() => {
+    fetchForms()
   }, [patientId])
 
   if (loading) {
@@ -92,6 +121,9 @@ function PatientProfileView({
       </div>
     )
   }
+
+  const completedCount = forms.filter((f) => f.status === "completed").length
+  const draftCount = forms.filter((f) => f.status === "draft").length
 
   return (
     <div className="flex flex-col gap-6">
@@ -145,54 +177,101 @@ function PatientProfileView({
         </Card>
       </div>
 
-      {/* Clinical Notes */}
+      {/* Form Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <ClipboardList className="size-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground font-medium">Total Forms</p>
+            </div>
+            <p className="text-2xl font-bold font-heading text-foreground">{forms.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <FileCheck className="size-4 text-accent" />
+              <p className="text-xs text-muted-foreground font-medium">Completed</p>
+            </div>
+            <p className="text-2xl font-bold font-heading text-accent">{completedCount}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <FileClock className="size-4 text-chart-4" />
+              <p className="text-xs text-muted-foreground font-medium">Drafts</p>
+            </div>
+            <p className="text-2xl font-bold font-heading text-chart-4">{draftCount}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Forms Table */}
       <Card className="border-border/60">
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-heading font-semibold text-foreground">
-            Clinical Notes ({patient.notes.length})
+            Forms ({forms.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs font-semibold text-muted-foreground">Date</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Type</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground hidden sm:table-cell">Summary</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {patient.notes.map((note) => (
-                <TableRow key={note.id}>
-                  <TableCell className="text-sm text-foreground">
-                    {note.date ? new Date(note.date).toLocaleDateString() : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-[10px] capitalize">{note.type}</Badge>
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <p className="text-sm text-muted-foreground line-clamp-1">{note.summary || "—"}</p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={`text-[10px] ${note.status === "signed" ? "bg-accent/10 text-accent" : "bg-chart-4/10 text-chart-4"}`}
-                    >
-                      {note.status}
-                    </Badge>
-                  </TableCell>
+          {loadingForms ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold text-muted-foreground">Form Name</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground hidden sm:table-cell">Category</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground">Status</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground hidden md:table-cell">Date</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground w-10" />
                 </TableRow>
-              ))}
-              {patient.notes.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
-                    No clinical notes yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {forms.map((form) => {
+                  const fc = formStatusConfig[form.status] || formStatusConfig["draft"]
+                  const FIcon = fc.icon
+                  return (
+                    <TableRow key={form.id} className="cursor-pointer transition-colors">
+                      <TableCell>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{form.templateName}</p>
+                          <p className="text-xs text-muted-foreground">#{form.id}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <Badge variant="secondary" className="text-[10px] capitalize">{form.templateCategory}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={`text-[10px] ${fc.color}`}>
+                          <FIcon className="mr-1 size-3" />{fc.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <span className="text-sm text-muted-foreground">
+                          {form.createdAt ? new Date(form.createdAt).toLocaleDateString() : "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight className="size-4 text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+                {forms.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
+                      No forms yet for this patient.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
