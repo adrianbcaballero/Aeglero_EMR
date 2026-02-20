@@ -343,6 +343,31 @@ def update_patient_form(patient_id, form_id):
     log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{f.id}", "SUCCESS", ip)
     return _serialize_form(f), 200
 
+@forms_bp.delete("/patients/<patient_id>/forms/<int:form_id>")
+@require_auth(roles=["admin", "psychiatrist", "technician"])
+def delete_patient_form(patient_id, form_id):
+    ip = _client_ip()
+
+    p = _get_patient(patient_id)
+    if not p:
+        log_access(g.user.id, "FORM_DELETE", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip)
+        return {"error": "patient not found"}, 404
+
+    if not _check_patient_access(p):
+        log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
+        return {"error": "forbidden"}, 403
+
+    f = PatientForm.query.filter_by(id=form_id, patient_id=p.id).first()
+    if not f:
+        log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
+        return {"error": "form not found"}, 404
+
+    db.session.delete(f)
+    db.session.commit()
+
+    log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "SUCCESS", ip)
+    return {"ok": True}, 200
+
 
 # ─── HELPERS ───
 
