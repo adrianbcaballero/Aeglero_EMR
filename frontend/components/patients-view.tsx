@@ -15,6 +15,7 @@ import {
   ClipboardList,
   CheckCircle2,
   Clock,
+  Trash2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -23,7 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { getPatients, getPatient, createPatient, getPatientForms, getPatientForm, createPatientForm, updatePatientForm, getTemplates, getMe } from "@/lib/api"
+import { getPatients, getPatient, createPatient, getPatientForms, getPatientForm, createPatientForm, updatePatientForm, deletePatientForm, getTemplates, getMe } from "@/lib/api"
 import type { Patient, PatientDetail, PatientFormEntry, FormTemplate, TemplateField } from "@/lib/api"
 
 import {
@@ -165,9 +166,9 @@ function FormFieldRenderer({ field, value, onChange }: { field: TemplateField; v
 
 // ─── Form Detail View ───
 function FormDetailView({
-  formId, patientCode, patientName, onBack,
+  formId, patientCode, patientName, onBack, onDeleted,
 }: {
-  formId: number; patientCode: string; patientName: string; onBack: () => void
+  formId: number; patientCode: string; patientName: string; onBack: () => void; onDeleted: () => void
 }) {
   const [form, setForm] = useState<PatientFormEntry | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
@@ -176,6 +177,8 @@ function FormDetailView({
   const [error, setError] = useState("")
   const [saveMsg, setSaveMsg] = useState("")
   const [showSignConfirm, setShowSignConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [userName, setUserName] = useState("")
 
   useEffect(() => {
@@ -196,6 +199,14 @@ function FormDetailView({
       .then((u) => { setForm({ ...u, templateFields: form?.templateFields }); setSaveMsg("Saved!") })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Save failed"))
       .finally(() => setSaving(false))
+  }
+
+  const handleDelete = () => {
+    setDeleting(true)
+    deletePatientForm(patientCode, formId)
+      .then(() => onDeleted())
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Delete failed"))
+      .finally(() => setDeleting(false))
   }
 
   const handleSignComplete = () => {
@@ -275,7 +286,32 @@ function FormDetailView({
               </Button>
             )}
             {saveMsg && <span className="text-sm text-accent">{saveMsg}</span>}
+            <div className="ml-auto">
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setShowDeleteConfirm(true)} disabled={saving || deleting}>
+                <Trash2 className="mr-1.5 size-3.5" /> Delete
+              </Button>
+            </div>
           </div>
+
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="font-heading text-foreground">Delete Form</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete <span className="font-semibold text-foreground">{form.templateName}</span>? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="bg-transparent text-foreground" disabled={deleting}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                  {deleting ? "Deleting…" : "Delete Form"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Sign Confirmation Dialog */}
           <Dialog open={showSignConfirm} onOpenChange={setShowSignConfirm}>
@@ -495,6 +531,7 @@ function PatientProfileView({
         patientCode={patient.id}
         patientName={`${patient.firstName} ${patient.lastName}`}
         onBack={() => { setSelectedFormId(null); fetchForms() }}
+        onDeleted={() => { setSelectedFormId(null); fetchForms() }}
       />
     )
   }
