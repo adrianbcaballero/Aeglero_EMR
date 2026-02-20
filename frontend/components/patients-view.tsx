@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   ChevronRight,
+  PenLine,
   ArrowLeft,
   Users,
   AlertTriangle,
@@ -20,8 +21,10 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { getPatients, getPatient, createPatient, getPatientForms } from "@/lib/api"
-import type { Patient, PatientDetail, PatientFormEntry } from "@/lib/api"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { getPatients, getPatient, createPatient, getPatientForms, getPatientForm, updatePatientForm } from "@/lib/api"
+import type { Patient, PatientDetail, PatientFormEntry, TemplateField } from "@/lib/api"
 
 import {
   Table,
@@ -68,6 +71,242 @@ const formStatusConfig: Record<string, FormStatusEntry> = {
   draft: { icon: Clock, color: "bg-chart-4/10 text-chart-4 border-chart-4/20", label: "Draft" },
 }
 
+// ─── Field Renderer ───
+function FormFieldRenderer({ field, value, onChange }: { field: TemplateField; value: unknown; onChange: (v: string | number | string[]) => void }) {
+  switch (field.type) {
+    case "text":
+      return <Input value={(value as string) || ""} onChange={(e) => onChange(e.target.value)} placeholder={field.label} />
+    case "textarea":
+      return <Textarea value={(value as string) || ""} onChange={(e) => onChange(e.target.value)} placeholder={field.label} className="min-h-[80px]" />
+    case "number":
+      return <Input type="number" value={(value as string) || ""} onChange={(e) => onChange(e.target.value)} placeholder={field.label} />
+    case "date":
+      return <Input type="date" value={(value as string) || ""} onChange={(e) => onChange(e.target.value)} />
+
+    case "checkbox": {
+      const opts = field.options || ["Yes", "No"]
+      const cur = (value as string) || ""
+      return (
+        <div className="flex gap-3">
+          {opts.map((o) => (
+            <label key={o} className="flex items-center gap-2 cursor-pointer">
+              <Checkbox checked={cur === o} onCheckedChange={() => onChange(o)} />
+              <span className="text-sm text-foreground">{o}</span>
+            </label>
+          ))}
+        </div>
+      )
+    }
+
+    case "checkbox_group": {
+      const opts = field.options || []
+      const sel = Array.isArray(value) ? (value as string[]) : []
+      return (
+        <div className="flex flex-col gap-2">
+          {opts.map((o) => (
+            <label key={o} className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={sel.includes(o)}
+                onCheckedChange={(c) => onChange(c ? [...sel, o] : sel.filter((s) => s !== o))}
+              />
+              <span className="text-sm text-foreground">{o}</span>
+            </label>
+          ))}
+        </div>
+      )
+    }
+
+    case "select": {
+      const opts = field.options || []
+      return (
+        <Select value={(value as string) || ""} onValueChange={onChange}>
+          <SelectTrigger><SelectValue placeholder={`Select ${field.label.toLowerCase()}`} /></SelectTrigger>
+          <SelectContent>
+            {opts.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )
+    }
+
+    case "scale": {
+      const mn = field.min ?? 0
+      const mx = field.max ?? 3
+      const cur = typeof value === "number" ? value : -1
+      return (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {Array.from({ length: mx - mn + 1 }, (_, i) => i + mn).map((n) => (
+              <button
+                key={n} type="button"
+                className={`size-10 rounded-lg border text-sm font-medium transition-colors ${cur === n ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-foreground border-border hover:bg-muted"}`}
+                onClick={() => onChange(n)}
+              >{n}</button>
+            ))}
+          </div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{mn} = Not at all</span><span>{mx} = Nearly every day</span>
+          </div>
+        </div>
+      )
+    }
+
+    case "signature":
+      return (
+        <div className="flex flex-col gap-2">
+          <Input value={(value as string) || ""} onChange={(e) => onChange(e.target.value)} placeholder="Type full name as signature" className="italic" />
+          {!!value && <p className="text-xs text-muted-foreground">Signed electronically on {new Date().toLocaleDateString()}</p>}
+        </div>
+      )
+
+    default:
+      return <Input value={(value as string) || ""} onChange={(e) => onChange(e.target.value)} placeholder={field.label} />
+  }
+}
+
+// ─── Form Detail View ───
+function FormDetailView({
+  formId, patientCode, patientName, onBack,
+}: {
+  formId: number; patientCode: string; patientName: string; onBack: () => void
+}) {
+  const [form, setForm] = useState<PatientFormEntry | null>(null)
+  const [formData, setFormData] = useState<Record<string, unknown>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [saveMsg, setSaveMsg] = useState("")
+
+  useEffect(() => {
+    getPatientForm(patientCode, formId)
+      .then((f) => { setForm(f); setFormData(f.formData || {}) })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .finally(() => setLoading(false))
+  }, [patientCode, formId])
+
+  const handleSave = (newStatus?: string) => {
+    setSaving(true)
+    setSaveMsg("")
+    const payload: { formData: Record<string, unknown>; status?: string } = { formData }
+    if (newStatus) payload.status = newStatus
+    updatePatientForm(patientCode, formId, payload)
+      .then((u) => { setForm(u); setSaveMsg(newStatus === "completed" ? "Form completed!" : "Saved!") })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Save failed"))
+      .finally(() => setSaving(false))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error || !form) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-sm text-destructive">{error || "Form not found"}</p>
+        <Button variant="outline" className="mt-3 bg-transparent text-foreground" onClick={onBack}>Back</Button>
+      </div>
+    )
+  }
+
+  const fields = form.templateFields || []
+  const cfg = formStatusConfig[form.status] || formStatusConfig["draft"]
+  const StatusIcon = cfg.icon
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
+          <ArrowLeft className="size-4" />
+        </Button>
+        <div className="flex-1">
+          <p className="text-xs text-muted-foreground">{patientName} / Forms</p>
+          <h1 className="text-2xl font-bold font-heading tracking-tight text-foreground">{form.templateName}</h1>
+        </div>
+        <Badge variant="secondary" className={`text-xs ${cfg.color}`}>
+          <StatusIcon className="mr-1 size-3" />{cfg.label}
+        </Badge>
+      </div>
+
+      {/* Fields Card */}
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="text-base font-heading font-semibold text-foreground">Form Fields</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6">
+          {fields.map((field, idx) => (
+            <div key={idx} className="flex flex-col gap-2">
+              <Label className="text-sm font-medium text-foreground">{idx + 1}. {field.label}</Label>
+              <FormFieldRenderer
+                field={field}
+                value={formData[field.label]}
+                onChange={(val) => { setFormData((p) => ({ ...p, [field.label]: val })); setSaveMsg("") }}
+              />
+            </div>
+          ))}
+          {fields.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No fields defined for this template.</p>
+          )}
+
+          <Separator />
+
+          <div className="flex items-center gap-3">
+            <Button variant="outline" className="bg-transparent text-foreground" onClick={() => handleSave()} disabled={saving}>
+              {saving ? "Saving…" : "Save Draft"}
+            </Button>
+            {form.status !== "completed" && (
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => handleSave("completed")} disabled={saving}>
+                <PenLine className="mr-2 size-4" />{saving ? "Saving…" : "Sign & Complete"}
+              </Button>
+            )}
+            {saveMsg && <span className="text-sm text-accent">{saveMsg}</span>}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Details Card */}
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="text-base font-heading font-semibold text-foreground">Form Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Form ID</p>
+              <p className="text-sm font-medium font-mono text-foreground mt-1">{form.id}</p>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Status</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <StatusIcon className="size-3.5" />
+                <span className="text-sm font-medium text-foreground">{cfg.label}</span>
+              </div>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Category</p>
+              <p className="text-sm font-medium text-foreground mt-1 capitalize">{form.templateCategory || "—"}</p>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Created</p>
+              <p className="text-sm font-medium text-foreground mt-1">{form.createdAt ? new Date(form.createdAt).toLocaleDateString() : "—"}</p>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Last Updated</p>
+              <p className="text-sm font-medium text-foreground mt-1">{form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : "—"}</p>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Filled By</p>
+              <p className="text-sm font-medium text-foreground mt-1">{form.filledByName || "—"}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // ------- Patient Profile View -------
 function PatientProfileView({
   patientId,
@@ -81,6 +320,7 @@ function PatientProfileView({
   const [loading, setLoading] = useState(true)
   const [loadingForms, setLoadingForms] = useState(true)
   const [error, setError] = useState("")
+  const [selectedFormId, setSelectedFormId] = useState<number | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -119,6 +359,17 @@ function PatientProfileView({
           <ArrowLeft className="mr-2 size-4" /> Back
         </Button>
       </div>
+    )
+  }
+
+  if (selectedFormId) {
+    return (
+      <FormDetailView
+        formId={selectedFormId}
+        patientCode={patient.id}
+        patientName={`${patient.firstName} ${patient.lastName}`}
+        onBack={() => { setSelectedFormId(null); fetchForms() }}
+      />
     )
   }
 
@@ -236,7 +487,7 @@ function PatientProfileView({
                   const fc = formStatusConfig[form.status] || formStatusConfig["draft"]
                   const FIcon = fc.icon
                   return (
-                    <TableRow key={form.id} className="cursor-pointer transition-colors">
+                    <TableRow key={form.id} className="cursor-pointer transition-colors" onClick={() => setSelectedFormId(form.id)}>
                       <TableCell>
                         <div>
                           <p className="text-sm font-medium text-foreground">{form.templateName}</p>
