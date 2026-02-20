@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { getPatients, getPatient, createPatient, getPatientForms, getPatientForm, createPatientForm, updatePatientForm, getTemplates} from "@/lib/api"
+import { getPatients, getPatient, createPatient, getPatientForms, getPatientForm, createPatientForm, updatePatientForm, getTemplates, getMe } from "@/lib/api"
 import type { Patient, PatientDetail, PatientFormEntry, FormTemplate, TemplateField } from "@/lib/api"
 
 import {
@@ -175,6 +175,12 @@ function FormDetailView({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [saveMsg, setSaveMsg] = useState("")
+  const [showSignConfirm, setShowSignConfirm] = useState(false)
+  const [userName, setUserName] = useState("")
+
+  useEffect(() => {
+    getMe().then((me) => setUserName(me.username)).catch(() => {})
+  }, [])
 
   useEffect(() => {
     getPatientForm(patientCode, formId)
@@ -183,13 +189,20 @@ function FormDetailView({
       .finally(() => setLoading(false))
   }, [patientCode, formId])
 
-  const handleSave = (newStatus?: string) => {
+  const handleSave = () => {
     setSaving(true)
     setSaveMsg("")
-    const payload: { formData: Record<string, unknown>; status?: string } = { formData }
-    if (newStatus) payload.status = newStatus
-    updatePatientForm(patientCode, formId, payload)
-      .then((u) => { setForm(u); setSaveMsg(newStatus === "completed" ? "Form completed!" : "Saved!") })
+    updatePatientForm(patientCode, formId, { formData })
+      .then((u) => { setForm({ ...u, templateFields: form?.templateFields }); setSaveMsg("Saved!") })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Save failed"))
+      .finally(() => setSaving(false))
+  }
+
+  const handleSignComplete = () => {
+    setSaving(true)
+    setShowSignConfirm(false)
+    updatePatientForm(patientCode, formId, { formData, status: "completed" })
+      .then(() => onBack())
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Save failed"))
       .finally(() => setSaving(false))
   }
@@ -253,16 +266,36 @@ function FormDetailView({
           <Separator />
 
           <div className="flex items-center gap-3">
-            <Button variant="outline" className="bg-transparent text-foreground" onClick={() => handleSave()} disabled={saving}>
+            <Button variant="outline" className="bg-transparent text-foreground" onClick={handleSave} disabled={saving}>
               {saving ? "Saving…" : "Save Draft"}
             </Button>
             {form.status !== "completed" && (
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => handleSave("completed")} disabled={saving}>
-                <PenLine className="mr-2 size-4" />{saving ? "Saving…" : "Sign & Complete"}
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setShowSignConfirm(true)} disabled={saving}>
+                <PenLine className="mr-2 size-4" />Sign & Complete
               </Button>
             )}
             {saveMsg && <span className="text-sm text-accent">{saveMsg}</span>}
           </div>
+
+          {/* Sign Confirmation Dialog */}
+          <Dialog open={showSignConfirm} onOpenChange={setShowSignConfirm}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="font-heading text-foreground">Confirm Signature</DialogTitle>
+                <DialogDescription>
+                  <span className="font-semibold text-foreground">{userName}</span> will be signing <span className="font-semibold text-foreground">{form.templateName}</span>. This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setShowSignConfirm(false)} className="bg-transparent text-foreground" disabled={saving}>
+                  Cancel
+                </Button>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleSignComplete} disabled={saving}>
+                  {saving ? "Signing…" : "Confirm & Sign"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
 
