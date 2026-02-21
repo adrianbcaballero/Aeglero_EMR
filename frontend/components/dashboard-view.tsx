@@ -427,7 +427,7 @@ function PsychiatristDashboard({
               </div>
               <div className="text-left">
                 <p className="text-sm font-medium">Patient Record</p>
-                <p className="text-xs text-muted-foreground">View notes and details</p>
+                <p className="text-xs text-muted-foreground">View forms and details</p>
               </div>
               <ChevronRight className="size-4 text-muted-foreground ml-auto" />
             </Button>

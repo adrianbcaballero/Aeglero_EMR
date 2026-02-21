@@ -179,6 +179,7 @@ function FormDetailView({
   const [showSignConfirm, setShowSignConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [userName, setUserName] = useState("")
 
   useEffect(() => {
@@ -199,6 +200,18 @@ function FormDetailView({
       .then((u) => { setForm({ ...u, templateFields: form?.templateFields }); setSaveMsg("Saved!") })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Save failed"))
       .finally(() => setSaving(false))
+  }
+
+  const validateFields = (): string[] => {
+    const fields = form?.templateFields || []
+    const missing: string[] = []
+    for (const field of fields) {
+      const val = formData[field.label]
+      if (val === undefined || val === null || val === "") missing.push(field.label)
+      else if (Array.isArray(val) && val.length === 0) missing.push(field.label)
+      else if (typeof val === "number" && val < 0) missing.push(field.label)
+    }
+    return missing
   }
 
   const handleDelete = () => {
@@ -266,7 +279,7 @@ function FormDetailView({
               <FormFieldRenderer
                 field={field}
                 value={formData[field.label]}
-                onChange={(val) => { setFormData((p) => ({ ...p, [field.label]: val })); setSaveMsg("") }}
+                onChange={(val) => { setFormData((p) => ({ ...p, [field.label]: val })); setSaveMsg(""); setValidationErrors([]) }}
               />
             </div>
           ))}
@@ -281,7 +294,11 @@ function FormDetailView({
               {saving ? "Saving…" : "Save Draft"}
             </Button>
             {form.status !== "completed" && (
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setShowSignConfirm(true)} disabled={saving}>
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => {
+                const errors = validateFields()
+                setValidationErrors(errors)
+                if (errors.length === 0) setShowSignConfirm(true)
+              }} disabled={saving}>
                 <PenLine className="mr-2 size-4" />Sign & Complete
               </Button>
             )}
@@ -292,6 +309,13 @@ function FormDetailView({
               </Button>
             </div>
           </div>
+
+          {validationErrors.length > 0 && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm font-medium text-destructive mb-1">Please fill in all fields before signing:</p>
+              <p className="text-sm text-destructive/80">{validationErrors.join(", ")}</p>
+            </div>
+          )}
 
           {/* Delete Confirmation Dialog */}
           <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
