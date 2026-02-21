@@ -28,8 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { getAuditLogs, getAuditStats, exportAuditLogs } from "@/lib/api"
-import type { AuditLogEntry, AuditStats } from "@/lib/api"
+import { getAuditLogs, getAuditStats, exportAuditLogs, getUsers } from "@/lib/api"
+import type { AuditLogEntry, AuditStats, SystemUser } from "@/lib/api"
 
 // Map action/status to visual styles
 function getLogLevel(entry: AuditLogEntry): "success" | "error" | "warning" | "info" {
@@ -180,6 +180,8 @@ export function SystemLogsView() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [exporting, setExporting] = useState(false)
+  const [userFilter, setUserFilter] = useState<string>("")
+  const [usersList, setUsersList] = useState<SystemUser[]>([])
 
   const handleExport = () => {
     setExporting(true)
@@ -197,11 +199,12 @@ export function SystemLogsView() {
     setLoading(true)
     setError("")
 
-    const params: { status?: string; limit?: number; before_id?: number; date_from?: string; date_to?: string } = { limit: PAGE_SIZE }
+    const params: { status?: string; limit?: number; before_id?: number; date_from?: string; date_to?: string; user_id?: number } = { limit: PAGE_SIZE }
     if (statusFilter) params.status = statusFilter
     if (cursorBeforeId) params.before_id = cursorBeforeId
     if (dateFrom) params.date_from = dateFrom
     if (dateTo) params.date_to = dateTo
+    if (userFilter) params.user_id = parseInt(userFilter)
 
     getAuditLogs(params)
       .then((logsRes) => {
@@ -219,11 +222,15 @@ export function SystemLogsView() {
   }
 
   useEffect(() => {
+    getUsers().then(setUsersList).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     setBeforeId(undefined)
     setPageHistory([])
     fetchLogs()
     fetchStats()
-  }, [statusFilter, dateFrom, dateTo])
+  }, [statusFilter, dateFrom, dateTo, userFilter])
 
   const handleNextPage = () => {
     if (logs.length === 0) return
@@ -371,6 +378,19 @@ export function SystemLogsView() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="SUCCESS">Success</SelectItem>
                 <SelectItem value="FAILED">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={userFilter} onValueChange={(v) => setUserFilter(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="User" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Users</SelectItem>
+                {usersList.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.full_name || u.username}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Input
