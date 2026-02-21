@@ -19,16 +19,16 @@ def _client_ip():
 
 
 def _serialize_user(u: User):
-    is_locked = bool(u.locked_until and u.locked_until > datetime.now(timezone.utc))
+    is_temp_locked = bool(u.locked_until and u.locked_until > datetime.now(timezone.utc))
     return {
         "id": u.id,
         "username": u.username,
         "role": u.role,
         "full_name": u.full_name,
         "failed_attempts": u.failed_login_attempts,
-        "is_locked": is_locked,
+        "is_locked": is_temp_locked or u.permanently_locked,
+        "permanently_locked": u.permanently_locked,
         "locked_until": u.locked_until.isoformat() if u.locked_until else None,
-        # you can add last_login later when you track it
         "last_login": None,
     }
 
@@ -62,9 +62,34 @@ def unlock_user(user_id: int):
 
     u.failed_login_attempts = 0
     u.locked_until = None
+    u.permanently_locked = False
     db.session.commit()
 
     log_access(g.user.id, "USER_UNLOCK", f"user/{u.id}", "SUCCESS", ip)
+    return {"ok": True, "user": _serialize_user(u)}, 200
+
+
+@users_bp.post("/<int:user_id>/lock")
+@require_auth(roles=["admin"])
+def lock_user(user_id: int):
+    """
+    POST /api/users/:id/lock
+    Permanently lock a user account. Admin only.
+    """
+    ip = _client_ip()
+    u = User.query.get(user_id)
+    if not u:
+        log_access(g.user.id, "USER_LOCK", f"user/{user_id}", "FAILED", ip)
+        return {"error": "user not found"}, 404
+
+    if u.id == g.user.id:
+        log_access(g.user.id, "USER_LOCK", f"user/{user_id}", "FAILED", ip)
+        return {"error": "cannot lock your own account"}, 400
+
+    u.permanently_locked = True
+    db.session.commit()
+
+    log_access(g.user.id, "USER_LOCK", f"user/{u.id}", "SUCCESS", ip)
     return {"ok": True, "user": _serialize_user(u)}, 200
 
 
@@ -94,6 +119,7 @@ def reset_password(user_id: int):
     u.password_hash = generate_password_hash(new_password)
     u.failed_login_attempts = 0
     u.locked_until = None
+    u.permanently_locked = False
     db.session.commit()
 
     log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{u.id}", "SUCCESS", ip)

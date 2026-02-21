@@ -14,6 +14,7 @@ class User(db.Model):
 
     failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
     locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
+    permanently_locked = db.Column(db.Boolean, default=False, nullable=False)
 
 
 class Patient(db.Model):

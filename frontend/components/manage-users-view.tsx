@@ -41,7 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getUsers, unlockUser, resetUserPassword } from "@/lib/api"
+import { getUsers, lockUser, unlockUser, resetUserPassword } from "@/lib/api"
 import type { SystemUser } from "@/lib/api"
 
 const roleColors: Record<string, string> = {
@@ -80,6 +80,18 @@ export function ManageUsersView() {
   useEffect(() => {
     fetchUsers()
   }, [])
+
+  const handleLock = async (userId: number) => {
+    setActionLoading(userId)
+    try {
+      await lockUser(userId)
+      fetchUsers()
+    } catch {
+      // silently fail, user can retry
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   const handleUnlock = async (userId: number) => {
     setActionLoading(userId)
@@ -255,10 +267,15 @@ export function ManageUsersView() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {user.is_locked ? (
+                      {user.permanently_locked ? (
                         <Badge variant="secondary" className="text-[10px] bg-destructive/10 text-destructive">
                           <Lock className="mr-1 size-3" />
-                          Locked
+                          Permanently Locked
+                        </Badge>
+                      ) : user.is_locked ? (
+                        <Badge variant="secondary" className="text-[10px] bg-chart-4/10 text-chart-4">
+                          <Lock className="mr-1 size-3" />
+                          Temp Locked
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="text-[10px] bg-accent/10 text-accent">
@@ -285,7 +302,7 @@ export function ManageUsersView() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {user.is_locked && (
+                          {user.is_locked ? (
                             <>
                               <DropdownMenuItem
                                 onClick={() => handleUnlock(user.id)}
@@ -293,6 +310,18 @@ export function ManageUsersView() {
                               >
                                 <Unlock className="mr-2 size-4" />
                                 {actionLoading === user.id ? "Unlocking…" : "Unlock Account"}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          ) : (
+                            <>
+                              <DropdownMenuItem
+                                onClick={() => handleLock(user.id)}
+                                disabled={actionLoading === user.id}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Lock className="mr-2 size-4" />
+                                {actionLoading === user.id ? "Locking…" : "Lock Account"}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                             </>

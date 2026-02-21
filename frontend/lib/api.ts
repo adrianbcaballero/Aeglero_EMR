@@ -198,12 +198,17 @@ export interface SystemUser {
   full_name: string | null
   failed_attempts: number
   is_locked: boolean
+  permanently_locked: boolean
   locked_until: string | null
   last_login: string | null
 }
 
 export function getUsers() {
   return apiGet<SystemUser[]>("/api/users")
+}
+
+export function lockUser(userId: number) {
+  return apiPost<{ ok: boolean }>(`/api/users/${userId}/lock`, {})
 }
 
 export function unlockUser(userId: number) {

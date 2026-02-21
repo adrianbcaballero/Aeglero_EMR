@@ -89,7 +89,12 @@ def login():
         log_access(None, "LOGIN", "auth", "FAILED", ip)
         return {"error": "invalid credentials"}, 401
 
-    # Check lockout
+    # Check permanent lock
+    if user.permanently_locked:
+        log_access(user.id, "LOGIN", "auth", "FAILED", ip)
+        return {"error": "account is permanently locked. contact an administrator"}, 403
+
+    # Check temporary lockout
     if user.locked_until and user.locked_until > datetime.now(timezone.utc):
         log_access(user.id, "LOGIN", "auth", "FAILED", ip)
         return {"error": "account locked. try again later"}, 403
