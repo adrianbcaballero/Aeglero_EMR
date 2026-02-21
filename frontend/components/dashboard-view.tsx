@@ -12,6 +12,7 @@ import {
   Shield,
   Activity,
   Loader2,
+  FileClock,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -24,8 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getPatients, getAuditStats, getUsers } from "@/lib/api"
-import type { Patient, AuditStats, SystemUser } from "@/lib/api"
+import { getPatients, getAuditStats, getUsers, getPatientForms } from "@/lib/api"
+import type { Patient, AuditStats, SystemUser, PatientFormEntry } from "@/lib/api"
 import type { UserRole } from "@/components/login-page"
 import {
   PieChart,
@@ -108,7 +109,16 @@ function TechnicianDashboard({
   })
 
   const activeCount = patients.filter((p) => p.status === "active").length
-  const highRiskCount = patients.filter((p) => p.riskLevel === "high").length
+  const [draftCount, setDraftCount] = useState(0)
+
+  useEffect(() => {
+    if (patients.length === 0) return
+    Promise.all(patients.map((p) => getPatientForms(p.id).catch(() => [] as PatientFormEntry[])))
+      .then((allForms) => {
+        const drafts = allForms.flat().filter((f) => f.status === "draft").length
+        setDraftCount(drafts)
+      })
+  }, [patients])
 
   if (loading) {
     return (
@@ -135,11 +145,11 @@ function TechnicianDashboard({
           subtitle="Currently in treatment"
         />
         <StatCard
-          title="High Risk"
-          value={highRiskCount}
-          icon={AlertTriangle}
-          subtitle="Require close monitoring"
-          valueColor="text-destructive"
+          title="Draft Forms"
+          value={draftCount}
+          icon={FileClock}
+          subtitle="Forms awaiting completion"
+          valueColor="text-chart-4"
           onClick={() => onNavigate?.("Patients")}
         />
       </div>
@@ -148,7 +158,11 @@ function TechnicianDashboard({
 }
 
 // --- Admin Dashboard ---
-function AdminDashboard() {
+function AdminDashboard({
+  onNavigate,
+}: {
+  onNavigate?: (tab: string, options?: { filter?: string; patientId?: string }) => void
+}) {
   const [stats, setStats] = useState<AuditStats | null>(null)
   const [users, setUsers] = useState<SystemUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -196,6 +210,7 @@ function AdminDashboard() {
           value={users.length}
           icon={Users}
           subtitle="All system accounts"
+          onClick={() => onNavigate?.("Manage Users")}
         />
         <StatCard
           title="Active Sessions"
@@ -203,12 +218,14 @@ function AdminDashboard() {
           icon={Activity}
           subtitle="Currently online"
           valueColor="text-accent"
+          onClick={() => onNavigate?.("System Logs")}
         />
         <StatCard
           title="Logins Today"
           value={stats?.total_logins_today ?? 0}
           icon={Shield}
           subtitle="Successful authentications"
+          onClick={() => onNavigate?.("System Logs")}
         />
         <StatCard
           title="Failed Logins"
@@ -216,46 +233,8 @@ function AdminDashboard() {
           icon={AlertTriangle}
           subtitle={lockedCount > 0 ? `${lockedCount} account(s) locked` : "No locked accounts"}
           valueColor={(stats?.failed_logins_today ?? 0) > 0 ? "text-destructive" : undefined}
+          onClick={() => onNavigate?.("System Logs")}
         />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-border/60">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Shield className="size-3.5 text-destructive" />
-              <p className="text-sm text-muted-foreground font-medium">401 Unauthenticated</p>
-            </div>
-            <p className="text-2xl font-bold font-heading text-foreground">
-              {stats?.not_authenticated_today ?? 0}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Today</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/60">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Shield className="size-3.5 text-destructive" />
-              <p className="text-sm text-muted-foreground font-medium">403 Forbidden</p>
-            </div>
-            <p className="text-2xl font-bold font-heading text-foreground">
-              {stats?.unauthorized_attempts_today ?? 0}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Today</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/60">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-1.5 mb-1">
-              <AlertTriangle className="size-3.5 text-destructive" />
-              <p className="text-sm text-muted-foreground font-medium">500 Server Errors</p>
-            </div>
-            <p className="text-2xl font-bold font-heading text-foreground">
-              {stats?.server_errors_today ?? 0}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Today</p>
-          </CardContent>
-        </Card>
       </div>
 
       <Card className="border-border/60">
@@ -336,7 +315,7 @@ function PsychiatristDashboard({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           title="Total Patients"
           value={patients.length}
@@ -344,17 +323,11 @@ function PsychiatristDashboard({
           subtitle={`${activeCount} active`}
         />
         <StatCard
-          title="High Risk"
-          value={highRiskPatients.length}
-          icon={AlertTriangle}
-          subtitle="Require close monitoring"
-          valueColor="text-destructive"
-        />
-        <StatCard
-          title="Diagnoses Tracked"
-          value={Object.keys(diagnosisCounts).length}
-          icon={ClipboardList}
-          subtitle="Unique diagnoses"
+          title="Active Patients"
+          value={activeCount}
+          icon={Activity}
+          subtitle="Currently in treatment"
+          valueColor="text-accent"
         />
       </div>
 
@@ -517,7 +490,7 @@ export function DashboardView({
     case "technician":
       return <TechnicianDashboard onNavigate={onNavigate} />
     case "admin":
-      return <AdminDashboard />
+      return <AdminDashboard onNavigate={onNavigate} />
     case "psychiatrist":
     default:
       return <PsychiatristDashboard onNavigate={onNavigate} />
