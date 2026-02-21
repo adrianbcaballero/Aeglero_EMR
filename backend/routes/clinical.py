@@ -4,9 +4,8 @@ from flask import Blueprint, request, g
 
 from auth_middleware import require_auth
 from extensions import db
-from models import Patient, User, ClinicalNote, TreatmentPlan
+from models import Patient, User, TreatmentPlan
 from services.audit_logger import log_access
-from services.scoring import calculate_risk_level
 from sqlalchemy.orm.attributes import flag_modified
 
 clinical_bp = Blueprint("clinical", __name__, url_prefix="/api/patients")
@@ -55,18 +54,6 @@ def _provider_display(provider_id: int):
     return u.full_name or u.username
 
 
-def _serialize_note(n: ClinicalNote):
-    return {
-        "id": n.id,
-        "patientId": n.patient_id,
-        "providerId": n.provider_id,
-        "providerName": _provider_display(n.provider_id),
-        "date": n.created_at.isoformat() if n.created_at else None,
-        "type": n.note_type,
-        "status": n.status,
-        "summary": n.summary,
-        "diagnosis": n.diagnosis,
-    }
 
 
 def _serialize_plan(tp: TreatmentPlan):
@@ -79,82 +66,6 @@ def _serialize_plan(tp: TreatmentPlan):
         "status": tp.status,
         "updatedAt": tp.updated_at.isoformat() if tp.updated_at else None,
     }
-
-
-
-@clinical_bp.get("/<patient_id>/notes")
-@require_auth(roles=["technician", "psychiatrist", "admin"])
-def list_notes(patient_id):
-    ip = _client_ip()
-
-    p = _get_patient_by_id_or_code(patient_id)
-    if not p:
-        log_access(g.user.id, "NOTE_LIST", f"patient/{patient_id}/notes", "FAILED", ip)
-        return {"error": "patient not found"}, 404
-
-    if not _require_patient_access(p):
-        log_access(g.user.id, "NOTE_LIST", f"patient/{p.patient_code}/notes", "FAILED", ip)
-        return {"error": "forbidden"}, 403
-
-    notes = (
-        ClinicalNote.query
-        .filter_by(patient_id=p.id)
-        .order_by(ClinicalNote.created_at.desc())
-        .all()
-    )
-
-    log_access(g.user.id, "NOTE_LIST", f"patient/{p.patient_code}/notes", "SUCCESS", ip)
-    return [_serialize_note(n) for n in notes], 200
-
-
-@clinical_bp.post("/<patient_id>/notes")
-@require_auth(roles=["technician", "psychiatrist", "admin"])
-def create_note(patient_id):
-    ip = _client_ip()
-    data = request.get_json(silent=True) or {}
-
-    p = _get_patient_by_id_or_code(patient_id)
-    if not p:
-        log_access(g.user.id, "NOTE_CREATE", f"patient/{patient_id}/notes", "FAILED", ip)
-        return {"error": "patient not found"}, 404
-
-    if not _require_patient_access(p):
-        log_access(g.user.id, "NOTE_CREATE", f"patient/{p.patient_code}/notes", "FAILED", ip)
-        return {"error": "forbidden"}, 403
-
-    note_type = (data.get("type") or "progress").strip()
-    status = (data.get("status") or "draft").strip()
-
-    #validation
-    if status not in {"draft", "signed"}:
-        log_access(g.user.id, "NOTE_CREATE", f"patient/{p.patient_code}/notes", "FAILED", ip)
-        return {"error": "status must be draft or signed"}, 400
-
-    n = ClinicalNote(
-        patient_id=p.id,
-        provider_id=g.user.id,  #current user
-        note_type=note_type,
-        status=status,
-        summary=(data.get("summary") or "").strip() or None,
-        diagnosis=(data.get("diagnosis") or "").strip() or None,
-    )
-
-    db.session.add(n)
-    db.session.commit()
-
-    # Update patient risk level after new note
-    try:
-        new_risk = calculate_risk_level(p.id)
-        p.risk_level = new_risk
-        db.session.commit()
-        log_access(g.user.id, "RISK_SCORE_UPDATE", f"patient/{p.patient_code}", "SUCCESS", ip)
-        resp = _serialize_note(n)
-        resp["patientRiskLevel"] = p.risk_level
-        return resp, 201
-    except Exception:
-        db.session.rollback()
-        log_access(g.user.id, "RISK_SCORE_UPDATE", f"patient/{p.patient_code}", "FAILED", ip)
-        return {"error": "risk scoring failed"}, 500
 
 
 

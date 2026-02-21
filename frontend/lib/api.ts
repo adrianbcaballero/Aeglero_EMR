@@ -124,18 +124,6 @@ export interface Patient {
   assignedProvider: string | null
 }
 
-export interface ClinicalNote {
-  id: number
-  patientId: number
-  providerId: number
-  providerName?: string
-  date: string | null
-  type: string
-  status: string
-  summary: string | null
-  diagnosis: string | null
-}
-
 export interface TreatmentPlanData {
   id: number
   patientId: number
@@ -147,7 +135,6 @@ export interface TreatmentPlanData {
 }
 
 export interface PatientDetail extends Patient {
-  notes: ClinicalNote[]
   treatmentPlan: TreatmentPlanData | null
 }
 

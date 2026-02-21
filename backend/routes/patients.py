@@ -3,7 +3,7 @@ from sqlalchemy import or_
 
 from auth_middleware import require_auth
 from extensions import db
-from models import Patient, User, ClinicalNote, TreatmentPlan
+from models import Patient, User, TreatmentPlan
 
 from datetime import date
 import re
@@ -78,24 +78,6 @@ def _serialize_patient(p: Patient):
         "insurance": p.insurance,
         "riskLevel": p.risk_level,
         "assignedProvider": provider_name,
-    }
-
-def _serialize_note(n: ClinicalNote):
-    updated = getattr(n, "updated_at", None)
-    return {
-        "id": n.id,
-        "patientId": n.patient_id,
-        "providerId": n.provider_id,
-        "noteType": n.note_type,
-        "status": n.status,
-        "summary": n.summary,
-        "diagnosis": n.diagnosis,
-        "createdAt": n.created_at.isoformat() if n.created_at else None,
-        "updatedAt": (
-            updated.isoformat()
-            if updated
-            else (n.created_at.isoformat() if n.created_at else None)
-        ),
     }
 
 def _serialize_treatment_plan(tp: TreatmentPlan):
@@ -187,14 +169,6 @@ def get_patient(patient_id):
             log_access(g.user.id, "PATIENT_GET", f"patient/{p.patient_code}", "FAILED", ip)
             return {"error": "forbidden"}, 403
 
-    notes = (
-        ClinicalNote.query
-        .filter_by(patient_id=p.id)
-        .order_by(ClinicalNote.created_at.desc())
-        .limit(50)
-        .all()
-    )
-
     tp = (
         TreatmentPlan.query
         .filter_by(patient_id=p.id)
@@ -206,7 +180,6 @@ def get_patient(patient_id):
 
     return {
         **_serialize_patient(p),
-        "notes": [_serialize_note(n) for n in notes],
         "treatmentPlan": _serialize_treatment_plan(tp) if tp else None,
     }, 200
 

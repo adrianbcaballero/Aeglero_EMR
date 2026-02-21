@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from werkzeug.security import generate_password_hash
 from app import create_app
 from extensions import db
-from models import User, Patient, AuditLog, ClinicalNote, TreatmentPlan, FormTemplate, PatientForm
+from models import User, Patient, AuditLog, TreatmentPlan, FormTemplate, PatientForm
 import random
 
 app = create_app()
@@ -96,42 +96,25 @@ def seed():
 
         now = datetime.now(timezone.utc)
 
-        note_types = ["intake", "progress", "discharge"]
-        note_statuses = ["draft", "signed"]
-
-        for p in patients:
-            # 1–3 notes per patient
-            for _ in range(random.randint(1, 3)):
-                created = now - timedelta(days=random.randint(0, 30), hours=random.randint(0, 23))
-
-                n = ClinicalNote(
-                    patient_id=p.id,
-                    provider_id=technician.id if technician else None,
-                    note_type=random.choice(note_types),
-                    status=random.choice(note_statuses),
-                    summary=f"Patient update for {p.patient_code}.",
-                    diagnosis=p.primary_diagnosis or "unspecified",
-                    created_at=created,
-                )
-                db.session.add(n)
+    
 
             #70% of patients get a treatment plan
-            if random.random() < 0.7:
-                start = now.date() - timedelta(days=random.randint(0, 60))
-                review = start + timedelta(days=30)
+        if random.random() < 0.7:
+            start = now.date() - timedelta(days=random.randint(0, 60))
+            review = start + timedelta(days=30)
 
-                tp = TreatmentPlan(
-                    patient_id=p.id,
-                    start_date=start,
-                    review_date=review,
-                    goals=[
-                        {"goal": "Reduce symptoms", "target": "4 weeks"},
-                        {"goal": "Improve daily routine", "target": "2 weeks"},
-                    ],
-                    status="active",
-                    updated_at=now,
-                )
-                db.session.add(tp)
+            tp = TreatmentPlan(
+                patient_id=p.id,
+                start_date=start,
+                review_date=review,
+                goals=[
+                    {"goal": "Reduce symptoms", "target": "4 weeks"},
+                    {"goal": "Improve daily routine", "target": "2 weeks"},
+                ],
+                status="active",
+                updated_at=now,
+            )
+            db.session.add(tp)
 
         db.session.commit()
 
@@ -302,7 +285,7 @@ def seed():
         print("Seed complete: 3 users + 10 patients + audit logs created.")
         print("Login users: psychiatrist1 / technician1 / admin1")
         print("Password for all: password123!")
-        print("Patient Notes and Treatment Plans created with random data for testing created.")
+        print("Patient Treatment Plans created with random data for testing created.")
         print("Form templates and sample patient forms created for testing.")
 
 if __name__ == "__main__":
