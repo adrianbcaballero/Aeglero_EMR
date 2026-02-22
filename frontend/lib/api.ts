@@ -149,6 +149,7 @@ export interface AuditLogEntry {
   resource: string
   ipAddress: string | null
   status: string
+  description: string | null
 }
 
 export interface AuditLogsResponse {

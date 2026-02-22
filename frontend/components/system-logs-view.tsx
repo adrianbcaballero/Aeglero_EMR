@@ -152,7 +152,13 @@ function LogDetailPage({
 
           <Separator className="my-4" />
 
-          <div className="p-3 bg-muted/50 rounded-lg">
+          {log.description && (
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Description</p>
+              <p className="text-sm text-foreground">{log.description}</p>
+            </div>
+          )}
+          <div className="p-3 bg-muted/50 rounded-lg mt-3">
             <p className="text-xs text-muted-foreground mb-1">Resource</p>
             <p className="text-sm font-mono text-foreground">{log.resource}</p>
           </div>
@@ -490,8 +496,8 @@ export function SystemLogsView() {
                           {log.status}
                         </Badge>
                       </div>
-                      <p className="text-muted-foreground mt-0.5 leading-relaxed line-clamp-1 font-mono text-xs">
-                        {log.resource}
+                      <p className="text-muted-foreground mt-0.5 leading-relaxed line-clamp-1 text-xs">
+                        {log.description || log.resource}
                       </p>
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">

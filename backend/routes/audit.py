@@ -121,6 +121,7 @@ def get_audit_logs():
             "resource": log.resource,
             "ipAddress": log.ip_address,
             "status": log.status,
+            "description": log.description,
         })
     next_before_id = items[-1]["id"] if items else None
     
@@ -213,7 +214,7 @@ def export_audit_logs():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ID", "Timestamp", "User ID", "Username", "Action", "Resource", "IP Address", "Status"])
+    writer.writerow(["ID", "Timestamp", "User ID", "Username", "Action", "Resource", "IP Address", "Status", "Description"])
 
     for log, username in rows:
         writer.writerow([
@@ -225,6 +226,7 @@ def export_audit_logs():
             log.resource,
             log.ip_address or "",
             log.status,
+            log.description or "",
         ])
 
     csv_data = output.getvalue()
