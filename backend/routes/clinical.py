@@ -78,11 +78,11 @@ def get_treatment_plan(patient_id):
 
     p = _get_patient_by_id_or_code(patient_id)
     if not p:
-        log_access(g.user.id, "TREATMENTPLAN_GET", f"patient/{patient_id}/treatment-plan", "FAILED", ip)
+        log_access(g.user.id, "TREATMENTPLAN_GET", f"patient/{patient_id}/treatment-plan", "FAILED", ip, description=f"Patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     if not _require_patient_access(p):
-        log_access(g.user.id, "TREATMENTPLAN_GET", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip)
+        log_access(g.user.id, "TREATMENTPLAN_GET", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip, description=f"Access denied to treatment plan for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
     tp = TreatmentPlan.query.filter_by(patient_id=p.id).first()
@@ -103,29 +103,29 @@ def upsert_treatment_plan(patient_id):
 
     p = _get_patient_by_id_or_code(patient_id)
     if not p:
-        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{patient_id}/treatment-plan", "FAILED", ip)
+        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{patient_id}/treatment-plan", "FAILED", ip, description=f"Treatment plan update failed — patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     if not _require_patient_access(p):
-        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip)
+        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip, description=f"Access denied to treatment plan for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
     start_date = _parse_date_iso(data.get("startDate"))
     review_date = _parse_date_iso(data.get("reviewDate"))
     if start_date == "INVALID" or review_date == "INVALID":
-        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip)
+        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip, description=f"Treatment plan update failed for {p.patient_code} — invalid date format")
         return {"error": "startDate/reviewDate must be YYYY-MM-DD"}, 400
 
     status = (data.get("status") or "active").strip()
     if status not in {"active", "archived"}:
-        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip)
+        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip, description=f"Treatment plan update failed for {p.patient_code} — invalid status")
         return {"error": "status must be active or archived"}, 400
 
     goals = data.get("goals", [])
     if goals is None:
         goals = []
     if not isinstance(goals, (list, dict)):
-        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip)
+        log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "FAILED", ip, description=f"Treatment plan update failed for {p.patient_code} — goals must be a list")
         return {"error": "goals must be a list or object"}, 400
 
     tp = TreatmentPlan.query.filter_by(patient_id=p.id).first()
@@ -143,7 +143,8 @@ def upsert_treatment_plan(patient_id):
 
     db.session.commit()
 
-    log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "SUCCESS", ip)
+    action_word = "Created" if created else "Updated"
+    log_access(g.user.id, "TREATMENTPLAN_UPSERT", f"patient/{p.patient_code}/treatment-plan", "SUCCESS", ip, description=f"{action_word} treatment plan for {p.first_name} {p.last_name} ({p.patient_code})")
     return {"created": created, "treatmentPlan": _serialize_plan(tp)}, 200
 
 

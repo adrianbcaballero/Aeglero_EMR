@@ -87,7 +87,7 @@ def get_template(template_id):
     ip = _client_ip()
     t = FormTemplate.query.get(template_id)
     if not t:
-        log_access(g.user.id, "TEMPLATE_GET", f"template/{template_id}", "FAILED", ip)
+        log_access(g.user.id, "TEMPLATE_GET", f"template/{template_id}", "FAILED", ip, description=f"Template #{template_id} not found")
         return {"error": "template not found"}, 404
 
     data = _serialize_template(t)
@@ -104,22 +104,23 @@ def create_template():
 
     name = (data.get("name") or "").strip()
     if not name:
-        log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip)
+        if not name:
+            log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip, description="Template creation failed — name is required")
         return {"error": "name is required"}, 400
 
     category = (data.get("category") or "").strip()
     if not category:
-        log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip)
+        log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip, description="Template creation failed — category is required")
         return {"error": "category is required"}, 400
 
     fields = data.get("fields", [])
     if not isinstance(fields, list):
-        log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip)
+        log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip, description="Template creation failed — fields must be a list")
         return {"error": "fields must be a list"}, 400
 
     allowed_roles = data.get("allowedRoles", ["admin", "psychiatrist", "technician"])
     if not isinstance(allowed_roles, list):
-        log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip)
+        log_access(g.user.id, "TEMPLATE_CREATE", "templates", "FAILED", ip, description="Template creation failed — allowedRoles must be a list")
         return {"error": "allowedRoles must be a list"}, 400
 
     t = FormTemplate(
@@ -135,7 +136,7 @@ def create_template():
     db.session.add(t)
     db.session.commit()
 
-    log_access(g.user.id, "TEMPLATE_CREATE", f"template/{t.id}", "SUCCESS", ip)
+    log_access(g.user.id, "TEMPLATE_CREATE", f"template/{t.id}", "SUCCESS", ip, description=f"Created form template '{t.name}' ({t.category})")
     return _serialize_template(t), 201
 
 
@@ -147,7 +148,7 @@ def update_template(template_id):
 
     t = FormTemplate.query.get(template_id)
     if not t:
-        log_access(g.user.id, "TEMPLATE_UPDATE", f"template/{template_id}", "FAILED", ip)
+        log_access(g.user.id, "TEMPLATE_UPDATE", f"template/{template_id}", "FAILED", ip, description=f"Template update failed — template #{template_id} not found")
         return {"error": "template not found"}, 404
 
     if "name" in data:
@@ -182,7 +183,8 @@ def update_template(template_id):
 
     db.session.commit()
 
-    log_access(g.user.id, "TEMPLATE_UPDATE", f"template/{t.id}", "SUCCESS", ip)
+    updated_fields = [k for k in data.keys()]
+    log_access(g.user.id, "TEMPLATE_UPDATE", f"template/{t.id}", "SUCCESS", ip, description=f"Updated template '{t.name}' — fields: {', '.join(updated_fields)}")
     return _serialize_template(t), 200
 
 
@@ -195,11 +197,11 @@ def list_patient_forms(patient_id):
 
     p = _get_patient(patient_id)
     if not p:
-        log_access(g.user.id, "FORM_LIST", f"patient/{patient_id}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_LIST", f"patient/{patient_id}/forms", "FAILED", ip, description=f"Patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     if not _check_patient_access(p):
-        log_access(g.user.id, "FORM_LIST", f"patient/{p.patient_code}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_LIST", f"patient/{p.patient_code}/forms", "FAILED", ip, description=f"Access denied to forms for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
     forms = (
@@ -227,22 +229,22 @@ def get_patient_form(patient_id, form_id):
 
     p = _get_patient(patient_id)
     if not p:
-        log_access(g.user.id, "FORM_GET", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip)
+        log_access(g.user.id, "FORM_GET", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip, description=f"Patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     if not _check_patient_access(p):
-        log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
+        log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip, description=f"Access denied to form #{form_id} for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
     f = PatientForm.query.filter_by(id=form_id, patient_id=p.id).first()
     if not f:
-        log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
+        log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip, description=f"Form #{form_id} not found for patient {p.patient_code}")
         return {"error": "form not found"}, 404
 
     # Check role visibility
     template = FormTemplate.query.get(f.template_id)
     if template and g.user.role not in (template.allowed_roles or []):
-        log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
+        log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip, description=f"Role '{g.user.role}' not allowed to view form #{form_id}")
         return {"error": "forbidden"}, 403
 
     data = _serialize_form(f)
@@ -260,31 +262,31 @@ def create_patient_form(patient_id):
 
     p = _get_patient(patient_id)
     if not p:
-        log_access(g.user.id, "FORM_CREATE", f"patient/{patient_id}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_CREATE", f"patient/{patient_id}/forms", "FAILED", ip, description=f"Form creation failed — patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     if not _check_patient_access(p):
-        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip, description=f"Access denied to create form for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
     template_id = data.get("templateId")
     if not template_id:
-        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip, description="Form creation failed — templateId is required")
         return {"error": "templateId is required"}, 400
 
     template = FormTemplate.query.get(template_id)
     if not template or template.status != "active":
-        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip, description=f"Form creation failed — template #{template_id} not found or archived")
         return {"error": "template not found or archived"}, 404
 
     form_data = data.get("formData", {})
     if not isinstance(form_data, dict):
-        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip, description="Form creation failed — formData must be an object")
         return {"error": "formData must be an object"}, 400
 
     status = (data.get("status") or "draft").strip()
     if status not in {"draft", "completed"}:
-        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip)
+        log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip, description=f"Form creation failed — invalid status '{status}'")
         return {"error": "status must be draft or completed"}, 400
 
     f = PatientForm(
@@ -298,7 +300,7 @@ def create_patient_form(patient_id):
     db.session.add(f)
     db.session.commit()
 
-    log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms/{f.id}", "SUCCESS", ip)
+    log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms/{f.id}", "SUCCESS", ip, description=f"Added '{template.name}' form to {p.first_name} {p.last_name} ({p.patient_code})")
     return _serialize_form(f), 201
 
 
@@ -310,16 +312,16 @@ def update_patient_form(patient_id, form_id):
 
     p = _get_patient(patient_id)
     if not p:
-        log_access(g.user.id, "FORM_UPDATE", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip)
+        log_access(g.user.id, "FORM_UPDATE", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip, description=f"Form update failed — patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     if not _check_patient_access(p):
-        log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
+        log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip, description=f"Access denied to update form #{form_id} for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
     f = PatientForm.query.filter_by(id=form_id, patient_id=p.id).first()
     if not f:
-        log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
+        log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip, description=f"Form #{form_id} not found for patient {p.patient_code}")
         return {"error": "form not found"}, 404
 
     if "formData" in data:
@@ -336,7 +338,12 @@ def update_patient_form(patient_id, form_id):
 
     db.session.commit()
 
-    log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{f.id}", "SUCCESS", ip)
+    template = FormTemplate.query.get(f.template_id)
+    tpl_name = template.name if template else f"form #{f.id}"
+    if "status" in data and data["status"] == "completed":
+        log_access(g.user.id, "FORM_SIGN", f"patient/{p.patient_code}/forms/{f.id}", "SUCCESS", ip, description=f"Signed and completed '{tpl_name}' for {p.first_name} {p.last_name} ({p.patient_code})")
+    else:
+        log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{f.id}", "SUCCESS", ip, description=f"Saved draft of '{tpl_name}' for {p.first_name} {p.last_name} ({p.patient_code})")
     return _serialize_form(f), 200
 
 @forms_bp.delete("/patients/<patient_id>/forms/<int:form_id>")
@@ -358,10 +365,13 @@ def delete_patient_form(patient_id, form_id):
         log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
         return {"error": "form not found"}, 404
 
+    template = FormTemplate.query.get(f.template_id) if f else None
+    tpl_name = template.name if template else f"form #{form_id}"
+
     db.session.delete(f)
     db.session.commit()
-
-    log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "SUCCESS", ip)
+    log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "SUCCESS", ip, description=f"Deleted '{tpl_name}' from {p.first_name} {p.last_name} ({p.patient_code})")
+    
     return {"ok": True}, 200
 
 
