@@ -217,6 +217,11 @@ export function lockUser(userId: number) {
 export function updateUser(userId: number, data: { username?: string; role?: string; full_name?: string }) {
   return apiPut<{ ok: boolean; user: SystemUser }>(`/api/users/${userId}`, data)
 }
+
+export function createUser(data: { username: string; password: string; role: string; full_name?: string }) {
+  return apiPost<{ ok: boolean; user: SystemUser }>("/api/users", data)
+}
+
 export function unlockUser(userId: number) {
   return apiPost<{ ok: boolean; user: SystemUser }>(`/api/users/${userId}/unlock`)
 }

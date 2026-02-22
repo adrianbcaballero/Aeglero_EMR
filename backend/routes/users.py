@@ -177,3 +177,49 @@ def update_user(user_id: int):
 
     log_access(g.user.id, "USER_UPDATE", f"user/{u.id}", "SUCCESS", ip, description=f"Updated user '{u.username}': {', '.join(changes)}")
     return {"ok": True, "user": _serialize_user(u)}, 200
+
+@users_bp.post("/")
+@require_auth(roles=["admin"])
+def create_user():
+    """
+    POST /api/users
+    Body: { "username": "...", "password": "...", "role": "...", "full_name": "..." }
+    Admin only.
+    """
+    ip = _client_ip()
+    data = request.get_json(silent=True) or {}
+
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    role = (data.get("role") or "").strip()
+    full_name = (data.get("full_name") or "").strip() or None
+
+    if not username or len(username) < 3:
+        log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description="User creation failed — username must be at least 3 characters")
+        return {"error": "username must be at least 3 characters"}, 400
+
+    if not password or len(password) < 8:
+        log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — password too short for '{username}'")
+        return {"error": "password must be at least 8 characters"}, 400
+
+    if role not in {"admin", "psychiatrist", "technician"}:
+        log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — invalid role '{role}'")
+        return {"error": "role must be admin, psychiatrist, or technician"}, 400
+
+    existing = User.query.filter_by(username=username).first()
+    if existing:
+        log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — username '{username}' already exists")
+        return {"error": "username already exists"}, 409
+
+    u = User(
+        username=username,
+        password_hash=generate_password_hash(password),
+        role=role,
+        full_name=full_name,
+    )
+
+    db.session.add(u)
+    db.session.commit()
+
+    log_access(g.user.id, "USER_CREATE", f"user/{u.id}", "SUCCESS", ip, description=f"Created user '{u.username}' ({u.role}){' — ' + u.full_name if u.full_name else ''}")
+    return {"ok": True, "user": _serialize_user(u)}, 201

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   KeyRound,
   Pencil,
+  Plus,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -49,7 +50,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getUsers, lockUser, unlockUser, updateUser, resetUserPassword } from "@/lib/api"
+import { getUsers, lockUser, unlockUser, updateUser, createUser, resetUserPassword } from "@/lib/api"
 import type { SystemUser } from "@/lib/api"
 
 const roleColors: Record<string, string> = {
@@ -73,6 +74,13 @@ export function ManageUsersView() {
   const [actionLoading, setActionLoading] = useState<number | null>(null)
   const [resetDialogUser, setResetDialogUser] = useState<SystemUser | null>(null)
   const [editDialogUser, setEditDialogUser] = useState<SystemUser | null>(null)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [createUsername, setCreateUsername] = useState("")
+  const [createPassword, setCreatePassword] = useState("")
+  const [createRole, setCreateRole] = useState("technician")
+  const [createFullName, setCreateFullName] = useState("")
+  const [createError, setCreateError] = useState("")
+  const [createLoading, setCreateLoading] = useState(false)
   const [editUsername, setEditUsername] = useState("")
   const [editRole, setEditRole] = useState("")
   const [editFullName, setEditFullName] = useState("")
@@ -116,6 +124,44 @@ export function ManageUsersView() {
       // silently fail, user can retry
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  const openCreateDialog = () => {
+    setCreateUsername("")
+    setCreatePassword("")
+    setCreateRole("technician")
+    setCreateFullName("")
+    setCreateError("")
+    setShowCreateDialog(true)
+  }
+
+  const handleCreateUser = async () => {
+    if (!createUsername.trim() || createUsername.trim().length < 3) {
+      setCreateError("Username must be at least 3 characters")
+      return
+    }
+    if (!createPassword || createPassword.length < 8) {
+      setCreateError("Password must be at least 8 characters")
+      return
+    }
+
+    setCreateLoading(true)
+    setCreateError("")
+
+    try {
+      await createUser({
+        username: createUsername.trim(),
+        password: createPassword,
+        role: createRole,
+        full_name: createFullName.trim() || undefined,
+      })
+      setShowCreateDialog(false)
+      fetchUsers()
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create user")
+    } finally {
+      setCreateLoading(false)
     }
   }
 
@@ -204,6 +250,13 @@ export function ManageUsersView() {
             User accounts, lockout status, and access management
           </p>
         </div>
+        <Button
+          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={openCreateDialog}
+        >
+          <Plus className="mr-2 size-4" />
+          Create User
+        </Button>
       </div>
 
       {/* Stats */}
@@ -510,6 +563,78 @@ export function ManageUsersView() {
                 disabled={editLoading}
               >
                 {editLoading ? "Saving…" : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Create User Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-foreground">Create User</DialogTitle>
+            <DialogDescription>
+              Add a new user account to the system.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">Full Name</Label>
+              <Input
+                placeholder="Full name"
+                value={createFullName}
+                onChange={(e) => { setCreateFullName(e.target.value); setCreateError("") }}
+                disabled={createLoading}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">Username</Label>
+              <Input
+                placeholder="Username (min 3 characters)"
+                value={createUsername}
+                onChange={(e) => { setCreateUsername(e.target.value); setCreateError("") }}
+                disabled={createLoading}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">Password</Label>
+              <Input
+                type="password"
+                placeholder="Password (min 8 characters)"
+                value={createPassword}
+                onChange={(e) => { setCreatePassword(e.target.value); setCreateError("") }}
+                disabled={createLoading}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">Role</Label>
+              <Select value={createRole} onValueChange={setCreateRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="psychiatrist">Psychiatrist</SelectItem>
+                  <SelectItem value="technician">Technician</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="bg-transparent text-foreground"
+                onClick={() => setShowCreateDialog(false)}
+                disabled={createLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleCreateUser}
+                disabled={createLoading}
+              >
+                {createLoading ? "Creating…" : "Create User"}
               </Button>
             </div>
           </div>
