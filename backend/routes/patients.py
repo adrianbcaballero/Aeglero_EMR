@@ -161,12 +161,12 @@ def get_patient(patient_id):
         p = Patient.query.filter_by(patient_code=patient_id).first()
 
     if not p:
-        log_access(g.user.id, "PATIENT_GET", f"patient/{patient_id}", "FAILED", ip)
+        log_access(g.user.id, "PATIENT_GET", f"patient/{patient_id}", "FAILED", ip, description=f"Patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     if g.user.role == "technician":
         if not p.assigned_provider_id or p.assigned_provider_id != g.user.id:
-            log_access(g.user.id, "PATIENT_GET", f"patient/{p.patient_code}", "FAILED", ip)
+            log_access(g.user.id, "PATIENT_GET", f"patient/{p.patient_code}", "FAILED", ip, description=f"Access denied to patient {p.patient_code} — not assigned provider")
             return {"error": "forbidden"}, 403
 
     tp = (
@@ -176,7 +176,7 @@ def get_patient(patient_id):
         .first()
     )
 
-    log_access(g.user.id, "PATIENT_GET", f"patient/{p.patient_code}", "SUCCESS", ip)
+    log_access(g.user.id, "PATIENT_GET", f"patient/{p.patient_code}", "SUCCESS", ip, description=f"Viewed patient record for {p.first_name} {p.last_name} ({p.patient_code})")
 
     return {
         **_serialize_patient(p),
@@ -206,23 +206,23 @@ def create_patient():
     last_name = (data.get("lastName") or "").strip()
 
     if not first_name or not last_name:
-        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description="Patient creation failed — missing first or last name")
         return {"error": "firstName and lastName are required"}, 400
 
     dob = _parse_date_iso(data.get("dateOfBirth"))
     if dob == "INVALID":
-        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description="Patient creation failed — invalid date of birth format")
         return {"error": "dateOfBirth must be YYYY-MM-DD"}, 400
 
     status = (data.get("status") or "active").strip()
     risk = (data.get("riskLevel") or "low").strip()
 
     if status not in VALID_STATUS:
-        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description=f"Patient creation failed — invalid status '{status}'")
         return {"error": f"status must be one of {sorted(VALID_STATUS)}"}, 400
 
     if risk not in VALID_RISK:
-        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description=f"Patient creation failed — invalid risk level '{risk}'")
         return {"error": f"riskLevel must be one of {sorted(VALID_RISK)}"}, 400
 
     #assigned provider handling
@@ -237,11 +237,11 @@ def create_patient():
         try:
             assigned_provider_id = int(assigned_provider_id)
         except ValueError:
-            log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+            log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description="Patient creation failed — assignedProviderId must be an integer")
             return {"error": "assignedProviderId must be an integer"}, 400
 
         if not User.query.get(assigned_provider_id):
-            log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip)
+            log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description=f"Patient creation failed — provider #{assigned_provider_id} not found")
             return {"error": "assignedProviderId does not exist"}, 400
 
     patient_code = (data.get("patientCode") or "").strip()
@@ -249,7 +249,7 @@ def create_patient():
         # validate uniqueness if provided
         existing = Patient.query.filter_by(patient_code=patient_code).first()
         if existing:
-            log_access(g.user.id, "PATIENT_CREATE", f"patient/{patient_code}", "FAILED", ip)
+            log_access(g.user.id, "PATIENT_CREATE", f"patient/{patient_code}", "FAILED", ip, description=f"Patient creation failed — code '{patient_code}' already exists")
             return {"error": "patientCode already exists"}, 409
     else:
         patient_code = _next_patient_code()
@@ -287,12 +287,12 @@ def update_patient(patient_id):
 
     p = _get_patient_by_id_or_code(patient_id)
     if not p:
-        log_access(g.user.id, "PATIENT_UPDATE", f"patient/{patient_id}", "FAILED", ip)
+        log_access(g.user.id, "PATIENT_UPDATE", f"patient/{patient_id}", "FAILED", ip, description=f"Patient update failed — '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
     #technician can only update assigned
     if g.user.role == "technician" and p.assigned_provider_id != g.user.id:
-        log_access(g.user.id, "PATIENT_UPDATE", f"patient/{p.patient_code}", "FAILED", ip)
+        log_access(g.user.id, "PATIENT_UPDATE", f"patient/{p.patient_code}", "FAILED", ip, description=f"Access denied to update patient {p.patient_code} — not assigned provider")
         return {"error": "forbidden"}, 403
 
     #Update allowed fields
@@ -360,6 +360,7 @@ def update_patient(patient_id):
 
     db.session.commit()
 
-    log_access(g.user.id, "PATIENT_UPDATE", f"patient/{p.patient_code}", "SUCCESS", ip)
+    updated_fields = [k for k in data.keys() if k != "patientCode"]
+    log_access(g.user.id, "PATIENT_UPDATE", f"patient/{p.patient_code}", "SUCCESS", ip, description=f"Updated patient {p.first_name} {p.last_name} ({p.patient_code}) — fields: {', '.join(updated_fields)}")
     return _serialize_patient(p), 200
 
