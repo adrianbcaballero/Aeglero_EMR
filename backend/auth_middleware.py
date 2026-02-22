@@ -64,12 +64,6 @@ def require_auth(roles=None):
 
             #Atach user
             g.user = user
-            try:
-                resp = fn(*args, **kwargs)
-                log_access(user.id, "ACCESS_200", request.path, "SUCCESS", ip)
-                return resp
-            except Exception:
-                log_access(user.id, "ACCESS_500", request.path, "FAILED", ip)
-                raise
+            return fn(*args, **kwargs)
         return wrapper
     return decorator

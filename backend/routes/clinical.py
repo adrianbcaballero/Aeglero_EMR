@@ -87,7 +87,6 @@ def get_treatment_plan(patient_id):
 
     tp = TreatmentPlan.query.filter_by(patient_id=p.id).first()
 
-    log_access(g.user.id, "TREATMENTPLAN_GET", f"patient/{p.patient_code}/treatment-plan", "SUCCESS", ip)
     return {"treatmentPlan": _serialize_plan(tp) if tp else None}, 200
 
 
@@ -173,5 +172,4 @@ def list_treatment_plans():
         plan["patientStatus"] = p.status
         items.append(plan)
 
-    log_access(g.user.id, "TREATMENTPLAN_LIST", "treatment-plans", "SUCCESS", ip)
     return items, 200

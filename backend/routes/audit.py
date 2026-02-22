@@ -52,7 +52,6 @@ def _serialize_log(row: AuditLog):
 @audit_bp.get("/logs")
 @require_auth(roles=["admin"])
 def get_audit_logs():
-    ip = _client_ip()
 
     user_id = request.args.get("user_id")
     action = (request.args.get("action") or "").strip()
@@ -74,7 +73,6 @@ def get_audit_logs():
         try:
             q = q.filter(AuditLog.user_id == int(user_id))
         except ValueError:
-            log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
             return {"error": "user_id must be an integer"}, 400
         
 
@@ -91,7 +89,6 @@ def get_audit_logs():
     dt_to = _parse_date(date_to)
 
     if dt_from == "INVALID" or dt_to == "INVALID":
-        log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
         return {"error": "date_from/date_to must be YYYY-MM-DD"}, 400
 
     if dt_from:
@@ -105,7 +102,6 @@ def get_audit_logs():
         try:
             q = q.filter(AuditLog.id < int(before_id))
         except ValueError:
-            log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "FAILED", ip)
             return {"error": "before_id must be an integer"}, 400
 
     rows = (
@@ -128,7 +124,6 @@ def get_audit_logs():
         })
     next_before_id = items[-1]["id"] if items else None
     
-    log_access(g.user.id, "AUDIT_LOGS", "audit/logs", "SUCCESS", ip)
     return {"total": total, "nextBeforeId": next_before_id, "items": items}, 200
 
 
@@ -146,7 +141,6 @@ def get_audit_stats():
       server_errors_today (500)
       active_sessions
     """
-    ip = _client_ip()
 
     now = datetime.now(timezone.utc)
     start_today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
@@ -171,7 +165,6 @@ def get_audit_stats():
 
     active_sessions = UserSession.query.count()
 
-    log_access(g.user.id, "AUDIT_STATS", "audit/stats", "SUCCESS", ip)
     return {
         "total_logins_today": total_logins_today,
         "failed_logins_today": failed_logins_today,

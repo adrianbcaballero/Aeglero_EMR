@@ -40,10 +40,8 @@ def list_users():
     GET /api/users
     Admin only
     """
-    ip = _client_ip()
     users = User.query.order_by(User.id.asc()).all()
 
-    log_access(g.user.id, "USERS_LIST", "users", "SUCCESS", ip)
     return [_serialize_user(u) for u in users], 200
 
 

@@ -78,7 +78,6 @@ def list_templates():
         data["instanceCount"] = PatientForm.query.filter_by(template_id=t.id).count()
         result.append(data)
 
-    log_access(g.user.id, "TEMPLATE_LIST", "templates", "SUCCESS", ip)
     return result, 200
 
 
@@ -94,7 +93,6 @@ def get_template(template_id):
     data = _serialize_template(t)
     data["instanceCount"] = PatientForm.query.filter_by(template_id=t.id).count()
 
-    log_access(g.user.id, "TEMPLATE_GET", f"template/{t.id}", "SUCCESS", ip)
     return data, 200
 
 
@@ -219,7 +217,6 @@ def list_patient_forms(patient_id):
         if template and user_role in (template.allowed_roles or []):
             result.append(_serialize_form(f))
 
-    log_access(g.user.id, "FORM_LIST", f"patient/{p.patient_code}/forms", "SUCCESS", ip)
     return result, 200
 
 
@@ -252,7 +249,6 @@ def get_patient_form(patient_id, form_id):
     # Include template fields so frontend can render the form
     data["templateFields"] = template.fields if template else []
 
-    log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "SUCCESS", ip)
     return data, 200
 
 

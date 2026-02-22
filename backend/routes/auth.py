@@ -141,14 +141,11 @@ def me():
     Returns: {user_id, username, role}
     """
     session_id = _get_session_id()
-    ip = _client_ip()
 
     user, sess = _validate_session(session_id)
     if not user:
-        log_access(None, "ME", "auth", "FAILED", ip)
         return {"error": "not authenticated"}, 401
 
-    log_access(user.id, "ME", "auth", "SUCCESS", ip)
     return {"user_id": user.id, "username": user.username, "role": user.role}, 200
 
 
