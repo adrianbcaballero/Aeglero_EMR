@@ -122,6 +122,25 @@ export interface Patient {
   insurance: string | null
   riskLevel: string
   assignedProvider: string | null
+  ssnLast4: string | null
+  gender: string | null
+  pronouns: string | null
+  maritalStatus: string | null
+  preferredLanguage: string | null
+  ethnicity: string | null
+  employmentStatus: string | null
+  addressStreet: string | null
+  addressCity: string | null
+  addressState: string | null
+  addressZip: string | null
+  emergencyContactName: string | null
+  emergencyContactPhone: string | null
+  emergencyContactRelationship: string | null
+  currentMedications: string | null
+  allergies: string | null
+  referringProvider: string | null
+  primaryCarePhysician: string | null
+  pharmacy: string | null
 }
 
 export interface TreatmentPlanData {

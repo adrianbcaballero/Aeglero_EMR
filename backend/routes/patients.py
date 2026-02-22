@@ -78,6 +78,25 @@ def _serialize_patient(p: Patient):
         "insurance": p.insurance,
         "riskLevel": p.risk_level,
         "assignedProvider": provider_name,
+        "ssnLast4": p.ssn_last4,
+        "gender": p.gender,
+        "pronouns": p.pronouns,
+        "maritalStatus": p.marital_status,
+        "preferredLanguage": p.preferred_language,
+        "ethnicity": p.ethnicity,
+        "employmentStatus": p.employment_status,
+        "addressStreet": p.address_street,
+        "addressCity": p.address_city,
+        "addressState": p.address_state,
+        "addressZip": p.address_zip,
+        "emergencyContactName": p.emergency_contact_name,
+        "emergencyContactPhone": p.emergency_contact_phone,
+        "emergencyContactRelationship": p.emergency_contact_relationship,
+        "currentMedications": p.current_medications,
+        "allergies": p.allergies,
+        "referringProvider": p.referring_provider,
+        "primaryCarePhysician": p.primary_care_physician,
+        "pharmacy": p.pharmacy,
     }
 
 def _serialize_treatment_plan(tp: TreatmentPlan):
@@ -254,6 +273,12 @@ def create_patient():
     else:
         patient_code = _next_patient_code()
 
+    # SSN validation (last 4 digits only)
+    ssn_last4 = (data.get("ssnLast4") or "").strip()
+    if ssn_last4 and (len(ssn_last4) != 4 or not ssn_last4.isdigit()):
+        log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description="Patient creation failed — ssnLast4 must be exactly 4 digits")
+        return {"error": "ssnLast4 must be exactly 4 digits"}, 400
+
     p = Patient(
         patient_code=patient_code,
         first_name=first_name,
@@ -266,6 +291,25 @@ def create_patient():
         primary_diagnosis=(data.get("primaryDiagnosis") or "").strip() or None,
         insurance=(data.get("insurance") or "").strip() or None,
         assigned_provider_id=assigned_provider_id,
+        ssn_last4=ssn_last4 or None,
+        gender=(data.get("gender") or "").strip() or None,
+        pronouns=(data.get("pronouns") or "").strip() or None,
+        marital_status=(data.get("maritalStatus") or "").strip() or None,
+        preferred_language=(data.get("preferredLanguage") or "").strip() or None,
+        ethnicity=(data.get("ethnicity") or "").strip() or None,
+        employment_status=(data.get("employmentStatus") or "").strip() or None,
+        address_street=(data.get("addressStreet") or "").strip() or None,
+        address_city=(data.get("addressCity") or "").strip() or None,
+        address_state=(data.get("addressState") or "").strip() or None,
+        address_zip=(data.get("addressZip") or "").strip() or None,
+        emergency_contact_name=(data.get("emergencyContactName") or "").strip() or None,
+        emergency_contact_phone=(data.get("emergencyContactPhone") or "").strip() or None,
+        emergency_contact_relationship=(data.get("emergencyContactRelationship") or "").strip() or None,
+        current_medications=(data.get("currentMedications") or "").strip() or None,
+        allergies=(data.get("allergies") or "").strip() or None,
+        referring_provider=(data.get("referringProvider") or "").strip() or None,
+        primary_care_physician=(data.get("primaryCarePhysician") or "").strip() or None,
+        pharmacy=(data.get("pharmacy") or "").strip() or None,
     )
 
     db.session.add(p)
@@ -357,6 +401,66 @@ def update_patient(patient_id):
                 return {"error": "assignedProviderId does not exist"}, 400
 
             p.assigned_provider_id = apid
+
+    if "ssnLast4" in data:
+        val = (data["ssnLast4"] or "").strip()
+        if val and (len(val) != 4 or not val.isdigit()):
+            return {"error": "ssnLast4 must be exactly 4 digits"}, 400
+        p.ssn_last4 = val or None
+
+    if "gender" in data:
+        p.gender = (data["gender"] or "").strip() or None
+
+    if "pronouns" in data:
+        p.pronouns = (data["pronouns"] or "").strip() or None
+
+    if "maritalStatus" in data:
+        p.marital_status = (data["maritalStatus"] or "").strip() or None
+
+    if "preferredLanguage" in data:
+        p.preferred_language = (data["preferredLanguage"] or "").strip() or None
+
+    if "ethnicity" in data:
+        p.ethnicity = (data["ethnicity"] or "").strip() or None
+
+    if "employmentStatus" in data:
+        p.employment_status = (data["employmentStatus"] or "").strip() or None
+
+    if "addressStreet" in data:
+        p.address_street = (data["addressStreet"] or "").strip() or None
+
+    if "addressCity" in data:
+        p.address_city = (data["addressCity"] or "").strip() or None
+
+    if "addressState" in data:
+        p.address_state = (data["addressState"] or "").strip() or None
+
+    if "addressZip" in data:
+        p.address_zip = (data["addressZip"] or "").strip() or None
+
+    if "emergencyContactName" in data:
+        p.emergency_contact_name = (data["emergencyContactName"] or "").strip() or None
+
+    if "emergencyContactPhone" in data:
+        p.emergency_contact_phone = (data["emergencyContactPhone"] or "").strip() or None
+
+    if "emergencyContactRelationship" in data:
+        p.emergency_contact_relationship = (data["emergencyContactRelationship"] or "").strip() or None
+
+    if "currentMedications" in data:
+        p.current_medications = (data["currentMedications"] or "").strip() or None
+
+    if "allergies" in data:
+        p.allergies = (data["allergies"] or "").strip() or None
+
+    if "referringProvider" in data:
+        p.referring_provider = (data["referringProvider"] or "").strip() or None
+
+    if "primaryCarePhysician" in data:
+        p.primary_care_physician = (data["primaryCarePhysician"] or "").strip() or None
+
+    if "pharmacy" in data:
+        p.pharmacy = (data["pharmacy"] or "").strip() or None
 
     db.session.commit()
 

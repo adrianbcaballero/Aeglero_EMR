@@ -38,6 +38,33 @@ class Patient(db.Model):
     primary_diagnosis = db.Column(db.String(120), nullable=True)
     insurance = db.Column(db.String(120), nullable=True)
 
+    # Identity
+    ssn_last4 = db.Column(db.String(4), nullable=True)
+    gender = db.Column(db.String(30), nullable=True)
+    pronouns = db.Column(db.String(30), nullable=True)
+    marital_status = db.Column(db.String(30), nullable=True)
+    preferred_language = db.Column(db.String(50), nullable=True)
+    ethnicity = db.Column(db.String(60), nullable=True)
+    employment_status = db.Column(db.String(30), nullable=True)
+
+    # Address
+    address_street = db.Column(db.String(200), nullable=True)
+    address_city = db.Column(db.String(100), nullable=True)
+    address_state = db.Column(db.String(50), nullable=True)
+    address_zip = db.Column(db.String(20), nullable=True)
+
+    # Emergency contact
+    emergency_contact_name = db.Column(db.String(120), nullable=True)
+    emergency_contact_phone = db.Column(db.String(30), nullable=True)
+    emergency_contact_relationship = db.Column(db.String(60), nullable=True)
+
+    # Clinical
+    current_medications = db.Column(db.Text, nullable=True)
+    allergies = db.Column(db.Text, nullable=True)
+    referring_provider = db.Column(db.String(120), nullable=True)
+    primary_care_physician = db.Column(db.String(120), nullable=True)
+    pharmacy = db.Column(db.String(120), nullable=True)
+
     assigned_provider_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
 
