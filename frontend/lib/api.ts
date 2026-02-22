@@ -214,6 +214,9 @@ export function lockUser(userId: number) {
   return apiPost<{ ok: boolean }>(`/api/users/${userId}/lock`, {})
 }
 
+export function updateUser(userId: number, data: { username?: string; role?: string; full_name?: string }) {
+  return apiPut<{ ok: boolean; user: SystemUser }>(`/api/users/${userId}`, data)
+}
 export function unlockUser(userId: number) {
   return apiPost<{ ok: boolean; user: SystemUser }>(`/api/users/${userId}/unlock`)
 }
@@ -412,3 +415,4 @@ export async function apiDelete<T>(path: string): Promise<T> {
 export function deletePatientForm(patientCode: string, formId: number) {
   return apiDelete<{ ok: boolean }>(`/api/patients/${patientCode}/forms/${formId}`)
 }
+

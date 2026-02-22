@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertTriangle,
   KeyRound,
+  Pencil,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -35,13 +36,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getUsers, lockUser, unlockUser, resetUserPassword } from "@/lib/api"
+import { getUsers, lockUser, unlockUser, updateUser, resetUserPassword } from "@/lib/api"
 import type { SystemUser } from "@/lib/api"
 
 const roleColors: Record<string, string> = {
@@ -64,6 +72,12 @@ export function ManageUsersView() {
   const [searchQuery, setSearchQuery] = useState("")
   const [actionLoading, setActionLoading] = useState<number | null>(null)
   const [resetDialogUser, setResetDialogUser] = useState<SystemUser | null>(null)
+  const [editDialogUser, setEditDialogUser] = useState<SystemUser | null>(null)
+  const [editUsername, setEditUsername] = useState("")
+  const [editRole, setEditRole] = useState("")
+  const [editFullName, setEditFullName] = useState("")
+  const [editError, setEditError] = useState("")
+  const [editLoading, setEditLoading] = useState(false)
   const [newPassword, setNewPassword] = useState("")
   const [resetError, setResetError] = useState("")
   const [resetLoading, setResetLoading] = useState(false)
@@ -102,6 +116,46 @@ export function ManageUsersView() {
       // silently fail, user can retry
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  const openEditDialog = (user: SystemUser) => {
+    setEditDialogUser(user)
+    setEditUsername(user.username)
+    setEditRole(user.role)
+    setEditFullName(user.full_name || "")
+    setEditError("")
+  }
+
+  const handleEditUser = async () => {
+    if (!editDialogUser) return
+    if (!editUsername.trim() || editUsername.trim().length < 3) {
+      setEditError("Username must be at least 3 characters")
+      return
+    }
+
+    setEditLoading(true)
+    setEditError("")
+
+    const updates: { username?: string; role?: string; full_name?: string } = {}
+    if (editUsername !== editDialogUser.username) updates.username = editUsername.trim()
+    if (editRole !== editDialogUser.role) updates.role = editRole
+    if (editFullName !== (editDialogUser.full_name || "")) updates.full_name = editFullName.trim()
+
+    if (Object.keys(updates).length === 0) {
+      setEditDialogUser(null)
+      setEditLoading(false)
+      return
+    }
+
+    try {
+      await updateUser(editDialogUser.id, updates)
+      setEditDialogUser(null)
+      fetchUsers()
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : "Failed to update user")
+    } finally {
+      setEditLoading(false)
     }
   }
 
@@ -326,6 +380,10 @@ export function ManageUsersView() {
                               <DropdownMenuSeparator />
                             </>
                           )}
+                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                            <Pencil className="mr-2 size-4" />
+                            Edit User
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
                               setResetDialogUser(user)
@@ -390,6 +448,68 @@ export function ManageUsersView() {
                 disabled={resetLoading}
               >
                 {resetLoading ? "Resetting…" : "Reset Password"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Edit User Dialog */}
+      <Dialog open={!!editDialogUser} onOpenChange={(open) => { if (!open) setEditDialogUser(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-foreground">Edit User</DialogTitle>
+            <DialogDescription>
+              Update account details for {editDialogUser?.full_name || editDialogUser?.username}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">Full Name</Label>
+              <Input
+                placeholder="Full name"
+                value={editFullName}
+                onChange={(e) => { setEditFullName(e.target.value); setEditError("") }}
+                disabled={editLoading}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">Username</Label>
+              <Input
+                placeholder="Username (min 3 characters)"
+                value={editUsername}
+                onChange={(e) => { setEditUsername(e.target.value); setEditError("") }}
+                disabled={editLoading}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-medium text-foreground">Role</Label>
+              <Select value={editRole} onValueChange={setEditRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="psychiatrist">Psychiatrist</SelectItem>
+                  <SelectItem value="technician">Technician</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="bg-transparent text-foreground"
+                onClick={() => setEditDialogUser(null)}
+                disabled={editLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleEditUser}
+                disabled={editLoading}
+              >
+                {editLoading ? "Saving…" : "Save Changes"}
               </Button>
             </div>
           </div>

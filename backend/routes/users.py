@@ -122,3 +122,58 @@ def reset_password(user_id: int):
 
     log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{u.id}", "SUCCESS", ip, description=f"Reset password for '{u.username}' ({u.role})")
     return {"ok": True}, 200
+
+
+@users_bp.put("/<int:user_id>")
+@require_auth(roles=["admin"])
+def update_user(user_id: int):
+    """
+    PUT /api/users/:id
+    Body: { "role": "...", "username": "..." }
+    Admin only.
+    """
+    ip = _client_ip()
+    data = request.get_json(silent=True) or {}
+
+    u = User.query.get(user_id)
+    if not u:
+        log_access(g.user.id, "USER_UPDATE", f"user/{user_id}", "FAILED", ip, description=f"User #{user_id} not found")
+        return {"error": "user not found"}, 404
+
+    changes = []
+
+    if "username" in data:
+        new_username = (data["username"] or "").strip()
+        if not new_username:
+            return {"error": "username cannot be empty"}, 400
+        if len(new_username) < 3:
+            return {"error": "username must be at least 3 characters"}, 400
+        existing = User.query.filter_by(username=new_username).first()
+        if existing and existing.id != u.id:
+            log_access(g.user.id, "USER_UPDATE", f"user/{user_id}", "FAILED", ip, description=f"Username '{new_username}' already taken")
+            return {"error": "username already exists"}, 409
+        changes.append(f"username '{u.username}' → '{new_username}'")
+        u.username = new_username
+
+    if "role" in data:
+        new_role = (data["role"] or "").strip()
+        if new_role not in {"admin", "psychiatrist", "technician"}:
+            return {"error": "role must be admin, psychiatrist, or technician"}, 400
+        if u.id == g.user.id and new_role != u.role:
+            log_access(g.user.id, "USER_UPDATE", f"user/{user_id}", "FAILED", ip, description="Attempted to change own role — denied")
+            return {"error": "cannot change your own role"}, 400
+        changes.append(f"role '{u.role}' → '{new_role}'")
+        u.role = new_role
+
+    if "full_name" in data:
+        new_name = (data["full_name"] or "").strip()
+        changes.append(f"name → '{new_name}'")
+        u.full_name = new_name or None
+
+    if not changes:
+        return {"error": "no fields to update"}, 400
+
+    db.session.commit()
+
+    log_access(g.user.id, "USER_UPDATE", f"user/{u.id}", "SUCCESS", ip, description=f"Updated user '{u.username}': {', '.join(changes)}")
+    return {"ok": True, "user": _serialize_user(u)}, 200
