@@ -233,11 +233,13 @@ export async function exportAuditLogs(params?: {
   status?: string
   date_from?: string
   date_to?: string
+  user_id?: number
 }) {
   const query = new URLSearchParams()
   if (params?.status) query.set("status", params.status)
   if (params?.date_from) query.set("date_from", params.date_from)
   if (params?.date_to) query.set("date_to", params.date_to)
+  if (params?.user_id) query.set("user_id", String(params.user_id))
   const qs = query.toString()
   const url = `${API_BASE_URL}/api/audit/export${qs ? `?${qs}` : ""}`
 

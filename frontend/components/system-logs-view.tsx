@@ -191,10 +191,11 @@ export function SystemLogsView() {
 
   const handleExport = () => {
     setExporting(true)
-    const params: { status?: string; date_from?: string; date_to?: string } = {}
+    const params: { status?: string; date_from?: string; date_to?: string; user_id?: number } = {}
     if (statusFilter) params.status = statusFilter
     if (dateFrom) params.date_from = dateFrom
     if (dateTo) params.date_to = dateTo
+    if (userFilter) params.user_id = parseInt(userFilter)
 
     exportAuditLogs(params)
       .catch(() => {})

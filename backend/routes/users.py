@@ -55,7 +55,7 @@ def unlock_user(user_id: int):
     ip = _client_ip()
     u = User.query.get(user_id)
     if not u:
-        log_access(g.user.id, "USER_UNLOCK", f"user/{user_id}", "FAILED", ip)
+        log_access(g.user.id, "USER_UNLOCK", f"user/{user_id}", "FAILED", ip, description=f"Failed to unlock user #{user_id} — not found")
         return {"error": "user not found"}, 404
 
     u.failed_login_attempts = 0
@@ -63,7 +63,7 @@ def unlock_user(user_id: int):
     u.permanently_locked = False
     db.session.commit()
 
-    log_access(g.user.id, "USER_UNLOCK", f"user/{u.id}", "SUCCESS", ip)
+    log_access(g.user.id, "USER_UNLOCK", f"user/{u.id}", "SUCCESS", ip, description=f"Unlocked account for '{u.username}' ({u.role})")
     return {"ok": True, "user": _serialize_user(u)}, 200
 
 
@@ -77,17 +77,17 @@ def lock_user(user_id: int):
     ip = _client_ip()
     u = User.query.get(user_id)
     if not u:
-        log_access(g.user.id, "USER_LOCK", f"user/{user_id}", "FAILED", ip)
+        log_access(g.user.id, "USER_LOCK", f"user/{user_id}", "FAILED", ip, description=f"Failed to lock user #{user_id} — not found")
         return {"error": "user not found"}, 404
 
     if u.id == g.user.id:
-        log_access(g.user.id, "USER_LOCK", f"user/{user_id}", "FAILED", ip)
+        log_access(g.user.id, "USER_LOCK", f"user/{user_id}", "FAILED", ip, description="Attempted to lock own account — denied")
         return {"error": "cannot lock your own account"}, 400
 
     u.permanently_locked = True
     db.session.commit()
 
-    log_access(g.user.id, "USER_LOCK", f"user/{u.id}", "SUCCESS", ip)
+    log_access(g.user.id, "USER_LOCK", f"user/{u.id}", "SUCCESS", ip, description=f"Permanently locked account for '{u.username}' ({u.role})")
     return {"ok": True, "user": _serialize_user(u)}, 200
 
 
@@ -106,12 +106,12 @@ def reset_password(user_id: int):
     from services.password_validator import validate_password
     is_valid, error_msg = validate_password(new_password)
     if not is_valid:
-        log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{user_id}", "FAILED", ip)
+        log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{user_id}", "FAILED", ip, description=f"Password reset failed for user #{user_id} — {error_msg}")
         return {"error": error_msg}, 400
 
     u = User.query.get(user_id)
     if not u:
-        log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{user_id}", "FAILED", ip)
+        log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{user_id}", "FAILED", ip, description=f"Password reset failed — user #{user_id} not found")
         return {"error": "user not found"}, 404
 
     u.password_hash = generate_password_hash(new_password)
@@ -120,5 +120,5 @@ def reset_password(user_id: int):
     u.permanently_locked = False
     db.session.commit()
 
-    log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{u.id}", "SUCCESS", ip)
+    log_access(g.user.id, "USER_RESET_PASSWORD", f"user/{u.id}", "SUCCESS", ip, description=f"Reset password for '{u.username}' ({u.role})")
     return {"ok": True}, 200

@@ -71,7 +71,7 @@ def login():
     ip = _client_ip()
 
     if login_limiter.is_rate_limited(ip):
-        log_access(None, "LOGIN", "auth", "FAILED", ip)
+        log_access(None, "LOGIN", "auth", "FAILED", ip, description=f"Rate limited login attempt for '{username}'")
         remaining = login_limiter.remaining(ip)
         return {
             "error": "Too many login attempts. Please wait 60 seconds.",
@@ -79,24 +79,24 @@ def login():
         }, 429
 
     if not username or not password:
-        log_access(None, "LOGIN", "auth", "FAILED", ip)
+        log_access(None, "LOGIN", "auth", "FAILED", ip, description="Login failed — missing username or password")
         return {"error": "username and password required"}, 400
 
     user = User.query.filter_by(username=username).first()
 
     #IF username doesnt exist 
     if not user:
-        log_access(None, "LOGIN", "auth", "FAILED", ip)
+        log_access(None, "LOGIN", "auth", "FAILED", ip, description=f"Login failed — username '{username}' not found")
         return {"error": "invalid credentials"}, 401
 
     # Check permanent lock
     if user.permanently_locked:
-        log_access(user.id, "LOGIN", "auth", "FAILED", ip)
+        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login blocked — '{user.username}' is permanently locked")
         return {"error": "account is permanently locked. contact an administrator"}, 403
 
     # Check temporary lockout
     if user.locked_until and user.locked_until > datetime.now(timezone.utc):
-        log_access(user.id, "LOGIN", "auth", "FAILED", ip)
+        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login blocked — '{user.username}' temporarily locked")
         return {"error": "account locked. try again later"}, 403
 
     # Verify password
@@ -108,7 +108,7 @@ def login():
             user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=config.ACCOUNT_LOCKOUT_MINUTES)
 
         db.session.commit()
-        log_access(user.id, "LOGIN", "auth", "FAILED", ip)
+        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login failed — wrong password for '{user.username}' (attempt #{user.failed_login_attempts})")
         return {"error": "invalid credentials"}, 401
 
     # Success: reset lock counters
@@ -124,7 +124,7 @@ def login():
     db.session.add(sess)
     db.session.commit()
 
-    log_access(user.id, "LOGIN", "auth", "SUCCESS", ip)
+    log_access(user.id, "LOGIN", "auth", "SUCCESS", ip, description=f"User '{user.username}' ({user.role}) logged in")
 
     return {
         "user_id": user.id,
@@ -161,11 +161,10 @@ def logout():
     user, sess = _validate_session(session_id)
     if not sess:
         # No valid session (already logged out or expired)
-        log_access(None, "LOGOUT", "auth", "FAILED", ip)
         return {"ok": True}, 200
 
     db.session.delete(sess)
     db.session.commit()
 
-    log_access(user.id, "LOGOUT", "auth", "SUCCESS", ip)
+    log_access(user.id, "LOGOUT", "auth", "SUCCESS", ip, description=f"User '{user.username}' logged out")
     return {"ok": True}, 200

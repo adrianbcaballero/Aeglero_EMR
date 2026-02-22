@@ -55,11 +55,11 @@ def require_auth(roles=None):
 
             user, sess = _validate_session(session_id)
             if not user:
-                log_access(None, "ACCESS_401", request.path, "FAILED", ip)
+                log_access(None, "ACCESS_401", request.path, "FAILED", ip, description=f"Unauthenticated request to {request.method} {request.path}")
                 return {"error": "not authenticated"}, 401
 
             if roles and user.role not in roles:
-                log_access(user.id, "ACCESS_403", request.path, "FAILED", ip)
+                log_access(user.id, "ACCESS_403", request.path, "FAILED", ip, description=f"'{user.username}' ({user.role}) denied access to {request.method} {request.path}")
                 return {"error": "forbidden"}, 403
 
             #Atach user

@@ -192,8 +192,15 @@ def export_audit_logs():
     status = (request.args.get("status") or "").strip()
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
+    user_id = request.args.get("user_id")
 
     q = db.session.query(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id)
+
+    if user_id:
+        try:
+            q = q.filter(AuditLog.user_id == int(user_id))
+        except ValueError:
+            pass
 
     if status:
         q = q.filter(AuditLog.status == status)
@@ -202,7 +209,7 @@ def export_audit_logs():
     dt_to = _parse_date(date_to)
 
     if dt_from == "INVALID" or dt_to == "INVALID":
-        log_access(g.user.id, "AUDIT_EXPORT", "audit/export", "FAILED", ip)
+        log_access(g.user.id, "AUDIT_EXPORT", "audit/export", "FAILED", ip, description="Audit export failed — invalid date format")
         return {"error": "date_from/date_to must be YYYY-MM-DD"}, 400
 
     if dt_from:
@@ -234,7 +241,13 @@ def export_audit_logs():
 
     filename = f"audit_logs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
 
-    log_access(g.user.id, "AUDIT_EXPORT", "audit/export", "SUCCESS", ip)
+    filters = []
+    if status: filters.append(f"status={status}")
+    if date_from: filters.append(f"from={date_from}")
+    if date_to: filters.append(f"to={date_to}")
+    if user_id: filters.append(f"user_id={user_id}")
+    filter_desc = f" with filters: {', '.join(filters)}" if filters else " (no filters)"
+    log_access(g.user.id, "AUDIT_EXPORT", "audit/export", "SUCCESS", ip, description=f"Exported {len(rows)} audit log entries to CSV{filter_desc}")
     return Response(
         csv_data,
         mimetype="text/csv",
