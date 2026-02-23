@@ -87,7 +87,7 @@ export function getMe() {
   return apiGet<{ user_id: number; username: string; role: string }>("/api/auth/me");
 }
 
-// Patient API calls
+
 // Patient API calls
 export function getPatients() {
   return apiGet<Patient[]>("/api/patients")
@@ -97,16 +97,12 @@ export function getPatient(patientId: string) {
   return apiGet<PatientDetail>(`/api/patients/${patientId}`)
 }
 
-export function createPatient(data: {
-  firstName: string
-  lastName: string
-  dateOfBirth?: string
-  phone?: string
-  email?: string
-  insurance?: string
-  primaryDiagnosis?: string
-}) {
+export function createPatient(data: Record<string, unknown>) {
   return apiPost<Patient>("/api/patients", data)
+}
+
+export function updatePatient(patientCode: string, data: Record<string, unknown>) {
+  return apiPut<Patient>(`/api/patients/${patientCode}`, data)
 }
 
 // Shared types
