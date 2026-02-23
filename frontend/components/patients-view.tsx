@@ -17,6 +17,7 @@ import {
   Clock,
   Trash2,
   ChevronDown,
+  Archive,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -1084,6 +1085,77 @@ function NewPatientDialog({ onCreated }: { onCreated: () => void }) {
   )
 }
 
+// ------- Patient Table (reusable) -------
+function PatientTable({
+  patients,
+  onSelect,
+  emptyMessage,
+}: {
+  patients: Patient[]
+  onSelect: (id: string) => void
+  emptyMessage: string
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead className="text-xs font-semibold text-muted-foreground">Patient</TableHead>
+          <TableHead className="text-xs font-semibold text-muted-foreground hidden sm:table-cell">Diagnosis</TableHead>
+          <TableHead className="text-xs font-semibold text-muted-foreground hidden md:table-cell">Provider</TableHead>
+          <TableHead className="text-xs font-semibold text-muted-foreground">Risk</TableHead>
+          <TableHead className="text-xs font-semibold text-muted-foreground w-10" />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {patients.map((patient) => (
+          <TableRow
+            key={patient.id}
+            className="cursor-pointer transition-colors"
+            onClick={() => onSelect(patient.id)}
+          >
+            <TableCell>
+              <div className="flex items-center gap-3">
+                <Avatar className="size-8">
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                    {patient.firstName[0]}{patient.lastName[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {patient.firstName} {patient.lastName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{patient.id}</p>
+                </div>
+              </div>
+            </TableCell>
+            <TableCell className="hidden sm:table-cell">
+              <span className="text-sm text-foreground">{patient.primaryDiagnosis || "—"}</span>
+            </TableCell>
+            <TableCell className="hidden md:table-cell">
+              <span className="text-sm text-muted-foreground">{patient.assignedProvider || "Unassigned"}</span>
+            </TableCell>
+            <TableCell>
+              <Badge variant="secondary" className={`text-[10px] capitalize ${riskColors[patient.riskLevel] || ""}`}>
+                {patient.riskLevel}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              <ChevronRight className="size-4 text-muted-foreground" />
+            </TableCell>
+          </TableRow>
+        ))}
+        {patients.length === 0 && (
+          <TableRow>
+            <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
+              {emptyMessage}
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  )
+}
+
 // ------- Main Patients View -------
 export function PatientsView({
   initialFilter,
@@ -1096,9 +1168,8 @@ export function PatientsView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("active")
-  const [riskFilter, setRiskFilter] = useState<string>("")
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(initialPatientId || null)
+  const [archivedOpen, setArchivedOpen] = useState(false)
 
   const fetchPatients = () => {
     setLoading(true)
@@ -1118,28 +1189,28 @@ export function PatientsView({
     return (
       <PatientProfileView
         patientId={selectedPatientId}
-        onBack={() => setSelectedPatientId(null)}
+        onBack={() => { setSelectedPatientId(null); fetchPatients() }}
       />
     )
   }
 
-  // Filter patients client-side
-  const filteredPatients = patients.filter((p) => {
-    const matchesSearch =
-      !searchQuery ||
-      `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.primaryDiagnosis || "").toLowerCase().includes(searchQuery.toLowerCase())
+  // Search filter (applies to both sections)
+  const matchesSearch = (p: Patient) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+      p.id.toLowerCase().includes(q) ||
+      (p.primaryDiagnosis || "").toLowerCase().includes(q)
+    )
+  }
 
-    const matchesStatus = !statusFilter || p.status === statusFilter
-    const matchesRisk = !riskFilter || p.riskLevel === riskFilter
+  const activePatients = patients.filter((p) => p.status !== "archived" && matchesSearch(p))
+  const archivedPatients = patients.filter((p) => p.status === "archived" && matchesSearch(p))
 
-    return matchesSearch && matchesStatus && matchesRisk
-  })
-
-  // Stats from real data
-  const activeCount = patients.filter((p) => p.status === "active").length
-  const highRiskCount = patients.filter((p) => p.riskLevel === "high").length
+  const activeCount = patients.filter((p) => p.status !== "archived").length
+  const archivedCount = patients.filter((p) => p.status === "archived").length
+  const highRiskCount = patients.filter((p) => p.riskLevel === "high" && p.status !== "archived").length
 
   return (
     <div className="flex flex-col gap-6">
@@ -1153,12 +1224,12 @@ export function PatientsView({
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="border-border/60">
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 mb-1">
               <Users className="size-3.5 text-primary" />
-              <p className="text-xs text-muted-foreground font-medium">Total Patients</p>
+              <p className="text-xs text-muted-foreground font-medium">Total</p>
             </div>
             <p className="text-xl font-bold font-heading text-foreground">{patients.length}</p>
           </CardContent>
@@ -1175,6 +1246,15 @@ export function PatientsView({
         <Card className="border-border/60">
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 mb-1">
+              <Archive className="size-3.5 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground font-medium">Archived</p>
+            </div>
+            <p className="text-xl font-bold font-heading text-muted-foreground">{archivedCount}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-1.5 mb-1">
               <AlertTriangle className="size-3.5 text-destructive" />
               <p className="text-xs text-muted-foreground font-medium">High Risk</p>
             </div>
@@ -1183,39 +1263,15 @@ export function PatientsView({
         </Card>
       </div>
 
-      {/* Search + Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search patients..."
-            className="pl-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={riskFilter} onValueChange={(v) => setRiskFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Risk Level" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Risk</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="moderate">Moderate</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by name, ID, or diagnosis..."
+          className="pl-9"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
       {/* Loading / Error */}
@@ -1234,73 +1290,52 @@ export function PatientsView({
         </div>
       )}
 
-      {/* Patient Table */}
+      {/* Active Patients */}
       {!loading && !error && (
         <Card className="border-border/60">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-heading font-semibold text-foreground">
-              Patients ({filteredPatients.length})
+              Active Patients ({activePatients.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold text-muted-foreground">Patient</TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground hidden sm:table-cell">Diagnosis</TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground hidden md:table-cell">Provider</TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground">Risk</TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPatients.map((patient) => (
-                  <TableRow
-                    key={patient.id}
-                    className="cursor-pointer transition-colors"
-                    onClick={() => setSelectedPatientId(patient.id)}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="size-8">
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {patient.firstName[0]}{patient.lastName[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {patient.firstName} {patient.lastName}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{patient.id}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      <span className="text-sm text-foreground">{patient.primaryDiagnosis || "—"}</span>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      <span className="text-sm text-muted-foreground">{patient.assignedProvider || "Unassigned"}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={`text-[10px] capitalize ${riskColors[patient.riskLevel] || ""}`}>
-                        {patient.riskLevel}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <ChevronRight className="size-4 text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredPatients.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
-                      No patients match the current filters.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+            <PatientTable
+              patients={activePatients}
+              onSelect={setSelectedPatientId}
+              emptyMessage={searchQuery ? "No active patients match your search." : "No active patients."}
+            />
           </CardContent>
+        </Card>
+      )}
+
+      {/* Archived Patients — Collapsible */}
+      {!loading && !error && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-2">
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full text-left"
+              onClick={() => setArchivedOpen(!archivedOpen)}
+            >
+              {archivedOpen ? (
+                <ChevronDown className="size-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="size-4 text-muted-foreground" />
+              )}
+              <CardTitle className="text-base font-heading font-semibold text-muted-foreground">
+                Archived Patients ({archivedPatients.length})
+              </CardTitle>
+            </button>
+          </CardHeader>
+          {archivedOpen && (
+            <CardContent className="p-0">
+              <PatientTable
+                patients={archivedPatients}
+                onSelect={setSelectedPatientId}
+                emptyMessage={searchQuery ? "No archived patients match your search." : "No archived patients."}
+              />
+            </CardContent>
+          )}
         </Card>
       )}
     </div>
