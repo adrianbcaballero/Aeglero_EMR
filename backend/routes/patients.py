@@ -5,31 +5,15 @@ from auth_middleware import require_auth
 from extensions import db
 from models import Patient, User, TreatmentPlan
 
-from datetime import date
 import re
 from services.audit_logger import log_access
+from services.helpers import client_ip, parse_date_iso, get_patient_by_id_or_code, check_patient_access, provider_display_name
 
 
 patients_bp = Blueprint("patients", __name__, url_prefix="/api/patients")
 
 VALID_RISK = {"low", "moderate", "high"}
 VALID_STATUS = {"active", "inactive", "archived"}
-
-def _client_ip():
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.remote_addr
-
-
-def _parse_date_iso(value):
-    if value in (None, ""):
-        return None
-    try:
-        # expects YYYY-MM-DD
-        return date.fromisoformat(value)
-    except ValueError:
-        return "INVALID"
 
 
 def _next_patient_code():
@@ -49,21 +33,9 @@ def _next_patient_code():
     return f"PT-{max_n + 1:03d}"
 
 
-def _get_patient_by_id_or_code(patient_id: str):
-    p = None
-    if patient_id.isdigit():
-        p = Patient.query.get(int(patient_id))
-    if not p:
-        p = Patient.query.filter_by(patient_code=patient_id).first()
-    return p
-
-
 def _serialize_patient(p: Patient):
     #assigned provider display
-    provider_name = None
-    if p.assigned_provider_id:
-        u = User.query.get(p.assigned_provider_id)
-        provider_name = u.full_name or u.username if u else None
+    provider_name = provider_display_name(p.assigned_provider_id)
 
     return {
         # frontend uses string IDs like PT-001
@@ -170,7 +142,7 @@ def get_patient(patient_id):
     - /api/patients/PT-001
     - /api/patients/1 (numeric db id)
     """
-    ip = _client_ip()
+    ip = client_ip()
 
     p = None
     if patient_id.isdigit():
@@ -219,7 +191,7 @@ def create_patient():
     }
     """
     data = request.get_json(silent=True) or {}
-    ip = _client_ip()
+    ip = client_ip()
 
     first_name = (data.get("firstName") or "").strip()
     last_name = (data.get("lastName") or "").strip()
@@ -228,7 +200,7 @@ def create_patient():
         log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description="Patient creation failed — missing first or last name")
         return {"error": "firstName and lastName are required"}, 400
 
-    dob = _parse_date_iso(data.get("dateOfBirth"))
+    dob = parse_date_iso(data.get("dateOfBirth"))
     if dob == "INVALID":
         log_access(g.user.id, "PATIENT_CREATE", "patient", "FAILED", ip, description="Patient creation failed — invalid date of birth format")
         return {"error": "dateOfBirth must be YYYY-MM-DD"}, 400
@@ -327,9 +299,9 @@ def update_patient(patient_id):
     Body can include any updatable patient fields in camelCase.
     """
     data = request.get_json(silent=True) or {}
-    ip = _client_ip()
+    ip = client_ip()
 
-    p = _get_patient_by_id_or_code(patient_id)
+    p = get_patient_by_id_or_code(patient_id)
     if not p:
         log_access(g.user.id, "PATIENT_UPDATE", f"patient/{patient_id}", "FAILED", ip, description=f"Patient update failed — '{patient_id}' not found")
         return {"error": "patient not found"}, 404
@@ -353,7 +325,7 @@ def update_patient(patient_id):
         p.last_name = val
 
     if "dateOfBirth" in data:
-        dob = _parse_date_iso(data.get("dateOfBirth"))
+        dob = parse_date_iso(data.get("dateOfBirth"))
         if dob == "INVALID":
             return {"error": "dateOfBirth must be YYYY-MM-DD"}, 400
         p.date_of_birth = dob

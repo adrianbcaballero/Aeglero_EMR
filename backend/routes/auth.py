@@ -9,54 +9,10 @@ import config
 from models import User, UserSession
 from services.audit_logger import log_access
 from services.rate_limiter import login_limiter
+from services.helpers import client_ip
+from auth_middleware import _get_session_id, _validate_session
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
-
-
-def _client_ip():
-    #maybe for a proxy later
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.remote_addr
-
-
-def _get_session_id():
-    """
-    Reads session id from:
-    Authorization: Bearer <session_id>
-    """
-    auth = request.headers.get("Authorization", "")
-    if auth.lower().startswith("bearer "):
-        return auth.split(" ", 1)[1].strip()
-    return None
-
-
-def _validate_session(session_id: str):
-    """
-    Returns (user, session) if valid, else (None, None)
-    """
-    if not session_id:
-        return None, None
-
-    sess = UserSession.query.filter_by(session_id=session_id).first()
-    if not sess:
-        return None, None
-
-    if sess.expires_at < datetime.now(timezone.utc):
-        #delete expired session
-        db.session.delete(sess)
-        db.session.commit()
-        return None, None
-
-    user = User.query.get(sess.user_id)
-    if not user:
-        return None, None
-
-    sess.expires_at = datetime.now(timezone.utc) + timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
-    db.session.commit()
-    
-    return user, sess
 
 
 @auth_bp.post("/login")
@@ -68,7 +24,7 @@ def login():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
-    ip = _client_ip()
+    ip = client_ip()
 
     if login_limiter.is_rate_limited(ip):
         log_access(None, "LOGIN", "auth", "FAILED", ip, description=f"Rate limited login attempt for '{username}'")
@@ -156,7 +112,7 @@ def logout():
     Deletes session
     """
     session_id = _get_session_id()
-    ip = _client_ip()
+    ip = client_ip()
 
     user, sess = _validate_session(session_id)
     if not sess:

@@ -6,16 +6,10 @@ from auth_middleware import require_auth
 from extensions import db
 from models import User
 from services.audit_logger import log_access
+from services.helpers import client_ip
 from werkzeug.security import generate_password_hash
 
 users_bp = Blueprint("users", __name__, url_prefix="/api/users")
-
-
-def _client_ip():
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.remote_addr
 
 
 def _serialize_user(u: User):
@@ -52,7 +46,7 @@ def unlock_user(user_id: int):
     POST /api/users/:id/unlock
     Admin only
     """
-    ip = _client_ip()
+    ip = client_ip()
     u = User.query.get(user_id)
     if not u:
         log_access(g.user.id, "USER_UNLOCK", f"user/{user_id}", "FAILED", ip, description=f"Failed to unlock user #{user_id} — not found")
@@ -74,7 +68,7 @@ def lock_user(user_id: int):
     POST /api/users/:id/lock
     Permanently lock a user account. Admin only.
     """
-    ip = _client_ip()
+    ip = client_ip()
     u = User.query.get(user_id)
     if not u:
         log_access(g.user.id, "USER_LOCK", f"user/{user_id}", "FAILED", ip, description=f"Failed to lock user #{user_id} — not found")
@@ -99,7 +93,7 @@ def reset_password(user_id: int):
     Body: { "new_password": "..." }
     Admin only
     """
-    ip = _client_ip()
+    ip = client_ip()
     data = request.get_json(silent=True) or {}
     new_password = data.get("new_password")
 
@@ -132,7 +126,7 @@ def update_user(user_id: int):
     Body: { "role": "...", "username": "..." }
     Admin only.
     """
-    ip = _client_ip()
+    ip = client_ip()
     data = request.get_json(silent=True) or {}
 
     u = User.query.get(user_id)
@@ -186,7 +180,7 @@ def create_user():
     Body: { "username": "...", "password": "...", "role": "...", "full_name": "..." }
     Admin only.
     """
-    ip = _client_ip()
+    ip = client_ip()
     data = request.get_json(silent=True) or {}
 
     username = (data.get("username") or "").strip()

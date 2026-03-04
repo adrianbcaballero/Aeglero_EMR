@@ -5,16 +5,10 @@ from auth_middleware import require_auth
 from extensions import db
 from models import FormTemplate, PatientForm, Patient, User
 from services.audit_logger import log_access
+from services.helpers import client_ip, get_patient_by_id_or_code, check_patient_access
 from sqlalchemy.orm.attributes import flag_modified
 
 forms_bp = Blueprint("forms", __name__, url_prefix="/api")
-
-
-def _client_ip():
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.remote_addr
 
 
 def _serialize_template(t: FormTemplate):
@@ -62,7 +56,7 @@ def _serialize_form(f: PatientForm):
 @forms_bp.get("/templates")
 @require_auth(roles=["admin", "psychiatrist"])
 def list_templates():
-    ip = _client_ip()
+    ip = client_ip()
     status_filter = (request.args.get("status") or "").strip()
 
     q = FormTemplate.query
@@ -84,7 +78,7 @@ def list_templates():
 @forms_bp.get("/templates/<int:template_id>")
 @require_auth(roles=["admin", "psychiatrist"])
 def get_template(template_id):
-    ip = _client_ip()
+    ip = client_ip()
     t = FormTemplate.query.get(template_id)
     if not t:
         log_access(g.user.id, "TEMPLATE_GET", f"template/{template_id}", "FAILED", ip, description=f"Template #{template_id} not found")
@@ -99,7 +93,7 @@ def get_template(template_id):
 @forms_bp.post("/templates")
 @require_auth(roles=["admin", "psychiatrist"])
 def create_template():
-    ip = _client_ip()
+    ip = client_ip()
     data = request.get_json(silent=True) or {}
 
     name = (data.get("name") or "").strip()
@@ -143,7 +137,7 @@ def create_template():
 @forms_bp.put("/templates/<int:template_id>")
 @require_auth(roles=["admin", "psychiatrist"])
 def update_template(template_id):
-    ip = _client_ip()
+    ip = client_ip()
     data = request.get_json(silent=True) or {}
 
     t = FormTemplate.query.get(template_id)
@@ -193,14 +187,14 @@ def update_template(template_id):
 @forms_bp.get("/patients/<patient_id>/forms")
 @require_auth(roles=["admin", "psychiatrist", "technician"])
 def list_patient_forms(patient_id):
-    ip = _client_ip()
+    ip = client_ip()
 
-    p = _get_patient(patient_id)
+    p = get_patient_by_id_or_code(patient_id)
     if not p:
         log_access(g.user.id, "FORM_LIST", f"patient/{patient_id}/forms", "FAILED", ip, description=f"Patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
-    if not _check_patient_access(p):
+    if not check_patient_access(p):
         log_access(g.user.id, "FORM_LIST", f"patient/{p.patient_code}/forms", "FAILED", ip, description=f"Access denied to forms for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
@@ -225,14 +219,14 @@ def list_patient_forms(patient_id):
 @forms_bp.get("/patients/<patient_id>/forms/<int:form_id>")
 @require_auth(roles=["admin", "psychiatrist", "technician"])
 def get_patient_form(patient_id, form_id):
-    ip = _client_ip()
+    ip = client_ip()
 
-    p = _get_patient(patient_id)
+    p = get_patient_by_id_or_code(patient_id)
     if not p:
         log_access(g.user.id, "FORM_GET", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip, description=f"Patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
-    if not _check_patient_access(p):
+    if not check_patient_access(p):
         log_access(g.user.id, "FORM_GET", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip, description=f"Access denied to form #{form_id} for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
@@ -257,15 +251,15 @@ def get_patient_form(patient_id, form_id):
 @forms_bp.post("/patients/<patient_id>/forms")
 @require_auth(roles=["admin", "psychiatrist", "technician"])
 def create_patient_form(patient_id):
-    ip = _client_ip()
+    ip = client_ip()
     data = request.get_json(silent=True) or {}
 
-    p = _get_patient(patient_id)
+    p = get_patient_by_id_or_code(patient_id)
     if not p:
         log_access(g.user.id, "FORM_CREATE", f"patient/{patient_id}/forms", "FAILED", ip, description=f"Form creation failed — patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
-    if not _check_patient_access(p):
+    if not check_patient_access(p):
         log_access(g.user.id, "FORM_CREATE", f"patient/{p.patient_code}/forms", "FAILED", ip, description=f"Access denied to create form for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
@@ -307,15 +301,15 @@ def create_patient_form(patient_id):
 @forms_bp.put("/patients/<patient_id>/forms/<int:form_id>")
 @require_auth(roles=["admin", "psychiatrist", "technician"])
 def update_patient_form(patient_id, form_id):
-    ip = _client_ip()
+    ip = client_ip()
     data = request.get_json(silent=True) or {}
 
-    p = _get_patient(patient_id)
+    p = get_patient_by_id_or_code(patient_id)
     if not p:
         log_access(g.user.id, "FORM_UPDATE", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip, description=f"Form update failed — patient '{patient_id}' not found")
         return {"error": "patient not found"}, 404
 
-    if not _check_patient_access(p):
+    if not check_patient_access(p):
         log_access(g.user.id, "FORM_UPDATE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip, description=f"Access denied to update form #{form_id} for patient {p.patient_code}")
         return {"error": "forbidden"}, 403
 
@@ -349,14 +343,14 @@ def update_patient_form(patient_id, form_id):
 @forms_bp.delete("/patients/<patient_id>/forms/<int:form_id>")
 @require_auth(roles=["admin", "psychiatrist", "technician"])
 def delete_patient_form(patient_id, form_id):
-    ip = _client_ip()
+    ip = client_ip()
 
-    p = _get_patient(patient_id)
+    p = get_patient_by_id_or_code(patient_id)
     if not p:
         log_access(g.user.id, "FORM_DELETE", f"patient/{patient_id}/forms/{form_id}", "FAILED", ip)
         return {"error": "patient not found"}, 404
 
-    if not _check_patient_access(p):
+    if not check_patient_access(p):
         log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "FAILED", ip)
         return {"error": "forbidden"}, 403
 
@@ -373,19 +367,3 @@ def delete_patient_form(patient_id, form_id):
     log_access(g.user.id, "FORM_DELETE", f"patient/{p.patient_code}/forms/{form_id}", "SUCCESS", ip, description=f"Deleted '{tpl_name}' from {p.first_name} {p.last_name} ({p.patient_code})")
     
     return {"ok": True}, 200
-
-
-# ─── HELPERS ───
-
-def _get_patient(patient_id):
-    if str(patient_id).isdigit():
-        p = Patient.query.get(int(patient_id))
-        if p:
-            return p
-    return Patient.query.filter_by(patient_code=patient_id).first()
-
-
-def _check_patient_access(p: Patient) -> bool:
-    if g.user.role == "technician" and p.assigned_provider_id != g.user.id:
-        return False
-    return True

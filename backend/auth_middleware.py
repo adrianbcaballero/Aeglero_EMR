@@ -6,13 +6,7 @@ from flask import request, g
 from extensions import db
 from models import UserSession, User
 from services.audit_logger import log_access
-
-
-def _client_ip():
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.remote_addr
+from services.helpers import client_ip
 
 
 def _get_session_id():
@@ -50,7 +44,7 @@ def require_auth(roles=None):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            ip = _client_ip()
+            ip = client_ip()
             session_id = _get_session_id()
 
             user, sess = _validate_session(session_id)

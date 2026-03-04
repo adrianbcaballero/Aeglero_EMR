@@ -6,15 +6,10 @@ from auth_middleware import require_auth
 from models import AuditLog, UserSession, User
 from services.audit_logger import log_access
 from extensions import db
+from services.helpers import client_ip
 
 audit_bp = Blueprint("audit", __name__, url_prefix="/api/audit")
 
-
-def _client_ip():
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.remote_addr
 
 
 def _parse_date(value):
@@ -29,24 +24,6 @@ def _parse_date(value):
     except ValueError:
         return "INVALID"
 
-
-def _serialize_log(row: AuditLog):
-    # user display
-    username = None
-    if row.user_id:
-        u = User.query.get(row.user_id)
-        username = u.username if u else None
-
-    return {
-        "id": row.id,
-        "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-        "userId": row.user_id,
-        "username": username,
-        "action": row.action,
-        "resource": row.resource,
-        "ipAddress": row.ip_address,
-        "status": row.status,
-    }
 
 
 @audit_bp.get("/logs")
@@ -187,7 +164,7 @@ def export_audit_logs():
     import io
     from flask import Response
 
-    ip = _client_ip()
+    ip = client_ip()
 
     status = (request.args.get("status") or "").strip()
     date_from = request.args.get("date_from")
