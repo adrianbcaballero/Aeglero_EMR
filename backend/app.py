@@ -1,7 +1,7 @@
 from flask import Flask, g
 from flask_cors import CORS
 import config
-from extensions import db
+from extensions import db, migrate
 
 
 def create_app():
@@ -18,6 +18,7 @@ def create_app():
 
 
     db.init_app(app)
+    migrate.init_app(app, db)
 
 
     from routes.auth import auth_bp
@@ -40,9 +41,8 @@ def create_app():
     from routes.forms import forms_bp
     app.register_blueprint(forms_bp)
 
+    # Import models so Alembic can detect
     import models
-    with app.app_context():
-        db.create_all()
 
     @app.after_request
     def add_security_headers(response):
