@@ -76,7 +76,7 @@ def login():
     session_id = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
 
-    sess = UserSession(session_id=session_id, user_id=user.id, expires_at=expires_at)
+    sess = UserSession(session_id=session_id, user_id=user.id, tenant_id=user.tenant_id, expires_at=expires_at)
     db.session.add(sess)
     db.session.commit()
 
@@ -85,7 +85,8 @@ def login():
     return {
         "user_id": user.id,
         "username": user.username,
-        "role": user.role,         # psychiatrist | technician | admin
+        "role": user.role,
+        "tenant_id": user.tenant_id,
         "session_id": session_id,
     }, 200
 
@@ -102,7 +103,7 @@ def me():
     if not user:
         return {"error": "not authenticated"}, 401
 
-    return {"user_id": user.id, "username": user.username, "role": user.role}, 200
+    return {"user_id": user.id, "username": user.username, "role": user.role, "tenant_id": user.tenant_id}, 200
 
 
 @auth_bp.post("/logout")

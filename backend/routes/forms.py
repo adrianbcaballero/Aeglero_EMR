@@ -5,7 +5,7 @@ from auth_middleware import require_auth
 from extensions import db
 from models import FormTemplate, PatientForm, Patient, User
 from services.audit_logger import log_access
-from services.helpers import client_ip, get_patient_by_id_or_code, check_patient_access
+from services.helpers import client_ip, get_patient_by_id_or_code, check_patient_access, tenant_query
 from sqlalchemy.orm.attributes import flag_modified
 
 forms_bp = Blueprint("forms", __name__, url_prefix="/api")
@@ -59,7 +59,7 @@ def list_templates():
     ip = client_ip()
     status_filter = (request.args.get("status") or "").strip()
 
-    q = FormTemplate.query
+    q = tenant_query(FormTemplate)
     if status_filter:
         q = q.filter(FormTemplate.status == status_filter)
 
@@ -118,6 +118,7 @@ def create_template():
         return {"error": "allowedRoles must be a list"}, 400
 
     t = FormTemplate(
+        tenant_id=g.tenant_id,
         name=name,
         category=category,
         description=(data.get("description") or "").strip() or None,
@@ -284,6 +285,7 @@ def create_patient_form(patient_id):
         return {"error": "status must be draft or completed"}, 400
 
     f = PatientForm(
+        tenant_id=g.tenant_id,
         patient_id=p.id,
         template_id=template_id,
         form_data=form_data,

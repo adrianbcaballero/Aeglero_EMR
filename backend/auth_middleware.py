@@ -56,8 +56,9 @@ def require_auth(roles=None):
                 log_access(user.id, "ACCESS_403", request.path, "FAILED", ip, description=f"'{user.username}' ({user.role}) denied access to {request.method} {request.path}")
                 return {"error": "forbidden"}, 403
 
-            #Atach user
+            # Attach user and tenant context for the request
             g.user = user
+            g.tenant_id = user.tenant_id
             return fn(*args, **kwargs)
         return wrapper
     return decorator

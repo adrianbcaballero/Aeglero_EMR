@@ -7,7 +7,7 @@ from models import Patient, User, TreatmentPlan
 
 import re
 from services.audit_logger import log_access
-from services.helpers import client_ip, parse_date_iso, get_patient_by_id_or_code, check_patient_access, provider_display_name
+from services.helpers import client_ip, parse_date_iso, get_patient_by_id_or_code, check_patient_access, provider_display_name, tenant_query 
 
 
 patients_bp = Blueprint("patients", __name__, url_prefix="/api/patients")
@@ -21,7 +21,7 @@ def _next_patient_code():
     Generates the next PT-### code based on max existing.
     PT-001, PT-002, ...
     """
-    codes = db.session.query(Patient.patient_code).all()
+    codes = db.session.query(Patient.patient_code).filter(Patient.tenant_id == g.tenant_id).all()
     max_n = 0
     for (code,) in codes:
         if not code:
@@ -108,7 +108,7 @@ def list_patients():
     status = (request.args.get("status") or "").strip()
     risk_level = (request.args.get("risk_level") or "").strip()
 
-    q = Patient.query
+    q = tenant_query(Patient)
     q = _apply_rbac(q)
 
     if search:
@@ -252,6 +252,7 @@ def create_patient():
         return {"error": "ssnLast4 must be exactly 4 digits"}, 400
 
     p = Patient(
+        tenant_id=g.tenant_id,
         patient_code=patient_code,
         first_name=first_name,
         last_name=last_name,

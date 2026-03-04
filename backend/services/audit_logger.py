@@ -1,10 +1,15 @@
 # Audit Logging utility
 from datetime import datetime, timezone
+from flask import g
 from extensions import db
 from models import AuditLog
 
 def log_access(user_id, action, resource, status, ip_address=None, description=None):
+    # Capture tenant context if available (may not exist for unauthenticated requests)
+    tenant_id = getattr(g, "tenant_id", None)
+
     entry = AuditLog(
+        tenant_id=tenant_id,
         timestamp=datetime.now(timezone.utc),
         user_id=user_id,
         action=action,

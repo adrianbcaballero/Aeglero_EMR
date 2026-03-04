@@ -37,12 +37,14 @@ def get_patient_by_id_or_code(patient_id: str) -> Patient | None:
     """
     Looks up a patient by either numeric DB id or patient_code string (e.g. 'PT-001').
     Tries numeric first, then falls back to code lookup.
+    Always scoped to the current tenant.
     """
+    tid = getattr(g, "tenant_id", None)
     p = None
     if str(patient_id).isdigit():
-        p = Patient.query.get(int(patient_id))
+        p = Patient.query.filter_by(id=int(patient_id), tenant_id=tid).first()
     if not p:
-        p = Patient.query.filter_by(patient_code=patient_id).first()
+        p = Patient.query.filter_by(patient_code=patient_id, tenant_id=tid).first()
     return p
 
 
@@ -66,3 +68,12 @@ def provider_display_name(provider_id: int) -> str | None:
     if not u:
         return None
     return u.full_name or u.username
+
+
+def tenant_query(model):
+    """
+    Returns a base query scoped to the current tenant.
+    Every data query should start with this instead of Model.query
+    to enforce tenant isolation.
+    """
+    return model.query.filter(model.tenant_id == g.tenant_id)

@@ -4,7 +4,7 @@ from auth_middleware import require_auth
 from extensions import db
 from models import Patient, TreatmentPlan
 from services.audit_logger import log_access
-from services.helpers import client_ip, parse_date_iso, get_patient_by_id_or_code, check_patient_access
+from services.helpers import client_ip, parse_date_iso, get_patient_by_id_or_code, check_patient_access, tenant_query
 from sqlalchemy.orm.attributes import flag_modified
 
 clinical_bp = Blueprint("clinical", __name__, url_prefix="/api/patients")
@@ -87,7 +87,7 @@ def upsert_treatment_plan(patient_id):
     tp = TreatmentPlan.query.filter_by(patient_id=p.id).first()
     created = False
     if not tp:
-        tp = TreatmentPlan(patient_id=p.id)
+        tp = TreatmentPlan(patient_id=p.id, tenant_id=g.tenant_id)
         db.session.add(tp)
         created = True
 
@@ -113,7 +113,7 @@ def list_treatment_plans():
     """
     ip = client_ip()
 
-    q = db.session.query(TreatmentPlan, Patient).join(Patient, Patient.id == TreatmentPlan.patient_id)
+    q = db.session.query(TreatmentPlan, Patient).join(Patient, Patient.id == TreatmentPlan.patient_id).filter(TreatmentPlan.tenant_id == g.tenant_id)
 
     # RBAC: technicians only see assigned patients
     if g.user.role == "technician":

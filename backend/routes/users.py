@@ -6,7 +6,7 @@ from auth_middleware import require_auth
 from extensions import db
 from models import User
 from services.audit_logger import log_access
-from services.helpers import client_ip
+from services.helpers import client_ip, tenant_query
 from werkzeug.security import generate_password_hash
 
 users_bp = Blueprint("users", __name__, url_prefix="/api/users")
@@ -34,7 +34,7 @@ def list_users():
     GET /api/users
     Admin only
     """
-    users = User.query.order_by(User.id.asc()).all()
+    users = tenant_query(User).order_by(User.id.asc()).all()
 
     return [_serialize_user(u) for u in users], 200
 
@@ -142,7 +142,7 @@ def update_user(user_id: int):
             return {"error": "username cannot be empty"}, 400
         if len(new_username) < 3:
             return {"error": "username must be at least 3 characters"}, 400
-        existing = User.query.filter_by(username=new_username).first()
+        existing = tenant_query(User).filter_by(username=new_username).first()
         if existing and existing.id != u.id:
             log_access(g.user.id, "USER_UPDATE", f"user/{user_id}", "FAILED", ip, description=f"Username '{new_username}' already taken")
             return {"error": "username already exists"}, 409
@@ -202,12 +202,13 @@ def create_user():
         log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — invalid role '{role}'")
         return {"error": "role must be admin, psychiatrist, or technician"}, 400
 
-    existing = User.query.filter_by(username=username).first()
+    existing = tenant_query(User).filter_by(username=username).first()
     if existing:
         log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — username '{username}' already exists")
         return {"error": "username already exists"}, 409
 
     u = User(
+        tenant_id=g.tenant_id,
         username=username,
         password_hash=generate_password_hash(password),
         role=role,

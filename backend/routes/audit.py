@@ -6,7 +6,7 @@ from auth_middleware import require_auth
 from models import AuditLog, UserSession, User
 from services.audit_logger import log_access
 from extensions import db
-from services.helpers import client_ip
+from services.helpers import client_ip, tenant_query
 
 audit_bp = Blueprint("audit", __name__, url_prefix="/api/audit")
 
@@ -44,7 +44,7 @@ def get_audit_logs():
     except ValueError:
         limit = 200
 
-    q = db.session.query(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id)
+    q = db.session.query(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id).filter(AuditLog.tenant_id == g.tenant_id)
 
     if user_id:
         try:
@@ -126,6 +126,7 @@ def get_audit_stats():
 
     def _count(action, status=None):
         q = db.session.query(AuditLog).filter(
+            AuditLog.tenant_id == g.tenant_id,
             AuditLog.action == action,
             AuditLog.timestamp >= start_today,
             AuditLog.timestamp < start_tomorrow,
@@ -141,7 +142,7 @@ def get_audit_stats():
     unauthorized_attempts_today = _count("ACCESS_403", "FAILED")
     server_errors_today = _count("ACCESS_500", "FAILED")
 
-    active_sessions = UserSession.query.count()
+    active_sessions = tenant_query(UserSession).count()
 
     return {
         "total_logins_today": total_logins_today,
@@ -171,7 +172,7 @@ def export_audit_logs():
     date_to = request.args.get("date_to")
     user_id = request.args.get("user_id")
 
-    q = db.session.query(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id)
+    q = db.session.query(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id).filter(AuditLog.tenant_id == g.tenant_id)
 
     if user_id:
         try:

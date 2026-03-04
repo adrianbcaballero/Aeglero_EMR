@@ -5,7 +5,8 @@ class User(db.Model):
     __tablename__ = "user"
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False, index=True)
+    username = db.Column(db.String(80), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
 
     #Roles: psychiatrist, technician, admin
@@ -15,15 +16,31 @@ class User(db.Model):
     failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
     locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
     permanently_locked = db.Column(db.Boolean, default=False, nullable=False)
+    __table_args__ = (db.UniqueConstraint("tenant_id", "username", name="uq_tenant_username"),)
+
+class Tenant(db.Model):
+    __tablename__ = "tenant"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    slug = db.Column(db.String(80), unique=True, nullable=False)  # url-friendly identifier e.g. "sunrise-detox"
+    status = db.Column(db.String(20), nullable=False, default="active")  # active/suspended
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
 
 class Patient(db.Model):
     __tablename__ = "patient"
 
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False, index=True)
 
     #Unique patient code for refrencing 
-    patient_code = db.Column(db.String(20), unique=True, nullable=False)
+    patient_code = db.Column(db.String(20), nullable=False)
+    __table_args__ = (db.UniqueConstraint("tenant_id", "patient_code", name="uq_tenant_patient_code"),)
 
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
@@ -72,6 +89,7 @@ class UserSession(db.Model):
     __tablename__ = "user_session"
 
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False, index=True)
     session_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -81,6 +99,7 @@ class AuditLog(db.Model):
     __tablename__ = "audit_log"
 
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False, index=True)
     timestamp = db.Column(db.DateTime(timezone=True),
     default=lambda: datetime.now(timezone.utc),
     nullable=False
@@ -101,6 +120,7 @@ class TreatmentPlan(db.Model):
     __tablename__ = "treatment_plan"
 
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False, index=True)
 
     patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False, index=True, unique=True)
 
@@ -125,6 +145,7 @@ class FormTemplate(db.Model):
     __tablename__ = "form_template"
 
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False, index=True)
     name = db.Column(db.String(200), nullable=False)
     category = db.Column(db.String(50), nullable=False)  # intake, assessment, consent, insurance, clinical, discharge
     description = db.Column(db.Text, nullable=True)
@@ -156,6 +177,7 @@ class PatientForm(db.Model):
     __tablename__ = "patient_form"
 
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False, index=True)
     patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False, index=True)
     template_id = db.Column(db.Integer, db.ForeignKey("form_template.id"), nullable=False, index=True)
 
