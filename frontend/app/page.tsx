@@ -29,8 +29,23 @@ import {
 export default function EHRApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userRole, setUserRole] = useState<UserRole>("psychiatrist")
+  const [tenantName, setTenantName] = useState("")
+  const [currentUser, setCurrentUser] = useState<{ username: string; fullName: string | null }>({
+    username: "",
+    fullName: null,
+  })
   const [activeItem, setActiveItem] = useState("Dashboard")
   const [navOptions, setNavOptions] = useState<{ filter?: string; patientId?: string } | null>(null)
+
+  const handleSignOut = () => {
+    apiLogout().catch(() => {})
+    setSessionToken(null)
+    setIsLoggedIn(false)
+    setTenantName("")
+    setCurrentUser({ username: "", fullName: null })
+    setActiveItem("Dashboard")
+    setNavOptions(null)
+  }
 
   if (!isLoggedIn) {
     return (
@@ -38,6 +53,8 @@ export default function EHRApp() {
         onLogin={(role, session) => {
           setSessionToken(session.session_id)
           setUserRole(role)
+          setTenantName(session.tenant_name)
+          setCurrentUser({ username: session.username, fullName: session.full_name })
           setIsLoggedIn(true)
         }}
       />
@@ -93,6 +110,8 @@ export default function EHRApp() {
         warningSeconds={60}
         onTimeout={() => {
           setIsLoggedIn(false)
+          setTenantName("")
+          setCurrentUser({ username: "", fullName: null })
           setActiveItem("Dashboard")
           setNavOptions(null)
         }}
@@ -100,14 +119,10 @@ export default function EHRApp() {
       <AppSidebar
         activeItem={activeItem}
         onNavigate={handleSidebarNavigate}
-        onSignOut={() => {
-          apiLogout().catch(() => {})
-          setSessionToken(null)
-          setIsLoggedIn(false)
-          setActiveItem("Dashboard")
-          setNavOptions(null)
-        }}
+        onSignOut={handleSignOut}
         userRole={userRole}
+        tenantName={tenantName}
+        currentUser={currentUser}
       />
       <SidebarInset>
         <header className="flex h-14 items-center gap-3 border-b border-border bg-card px-4">
@@ -116,7 +131,7 @@ export default function EHRApp() {
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
-                <span className="text-xs text-muted-foreground">Aeglero EMR</span>
+                <span className="text-xs text-muted-foreground">{tenantName}</span>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>

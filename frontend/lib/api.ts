@@ -71,7 +71,10 @@ export function getHealth() {
 export interface LoginResponse {
   user_id: number;
   username: string;
+  full_name: string | null;
   role: "psychiatrist" | "technician" | "admin";
+  tenant_id: number;
+  tenant_name: string;
   session_id: string;
 }
 

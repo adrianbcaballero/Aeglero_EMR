@@ -60,10 +60,13 @@ const roleDisplayNames: Record<string, string> = {
   admin: "Administrator",
 }
 
-const roleUserNames: Record<string, { name: string; initials: string }> = {
-  psychiatrist: { name: "Dr. Emily Chen", initials: "EC" },
-  technician: { name: "Sarah Mitchell", initials: "SM" },
-  admin: { name: "System Admin", initials: "SA" },
+function getInitials(fullName: string | null, username: string): string {
+  if (fullName) {
+    const parts = fullName.trim().split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+  return username.slice(0, 2).toUpperCase()
 }
 
 interface AppSidebarProps {
@@ -71,29 +74,29 @@ interface AppSidebarProps {
   onNavigate: (item: string) => void
   onSignOut: () => void
   userRole: UserRole
+  tenantName: string
+  currentUser: { username: string; fullName: string | null }
 }
 
-export function AppSidebar({ activeItem, onNavigate, onSignOut, userRole }: AppSidebarProps) {
+export function AppSidebar({ activeItem, onNavigate, onSignOut, userRole, tenantName, currentUser }: AppSidebarProps) {
   const mainNavItems = allMainNavItems.filter((item) => item.roles.includes(userRole))
   const filteredAdminItems = adminNavItems.filter((item) => item.roles.includes(userRole))
   const showAdmin = filteredAdminItems.length > 0
-  const userInfo = roleUserNames[userRole] || { name: "User", initials: "U" }
+  const displayName = currentUser.fullName || currentUser.username
+  const initials = getInitials(currentUser.fullName, currentUser.username)
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              className="hover:bg-sidebar-accent"
-            >
+            <SidebarMenuButton size="lg" className="hover:bg-sidebar-accent">
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                 <Brain className="size-4" />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
                 <span className="font-semibold text-sidebar-primary-foreground">Aeglero</span>
-                <span className="text-xs text-sidebar-foreground/60">Mental Health EMR</span>
+                <span className="text-xs text-sidebar-foreground/60">{tenantName || "Mental Health EMR"}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -186,27 +189,20 @@ export function AppSidebar({ activeItem, onNavigate, onSignOut, userRole }: AppS
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="hover:bg-sidebar-accent"
-                >
+                <SidebarMenuButton size="lg" className="hover:bg-sidebar-accent">
                   <Avatar className="size-8 rounded-lg">
                     <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground rounded-lg text-xs">
-                      {userInfo.initials}
+                      {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col gap-0.5 leading-none text-left">
-                    <span className="text-sm font-medium text-sidebar-primary-foreground">{userInfo.name}</span>
+                    <span className="text-sm font-medium text-sidebar-primary-foreground">{displayName}</span>
                     <span className="text-xs text-sidebar-foreground/60">{roleDisplayNames[userRole]}</span>
                   </div>
                   <ChevronDown className="ml-auto size-4 text-sidebar-foreground/50" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="top"
-                align="start"
-                className="w-56"
-              >
+              <DropdownMenuContent side="top" align="start" className="w-56">
                 <DropdownMenuItem className="text-destructive" onClick={onSignOut}>
                   <LogOut className="mr-2 size-4" />
                   Sign Out

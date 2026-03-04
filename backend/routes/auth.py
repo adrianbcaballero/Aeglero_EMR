@@ -75,8 +75,10 @@ def login():
     return {
         "user_id": user.id,
         "username": user.username,
+        "full_name": user.full_name,
         "role": user.role,
         "tenant_id": t_id,
+        "tenant_name": tenant.name,
         "session_id": session_id,
     }, 200
 
@@ -93,7 +95,15 @@ def me():
     if not user:
         return {"error": "not authenticated"}, 401
 
-    return {"user_id": user.id, "username": user.username, "role": user.role, "tenant_id": user.tenant_id}, 200
+    tenant = Tenant.query.get(user.tenant_id)
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "role": user.role,
+        "tenant_id": user.tenant_id,
+        "tenant_name": tenant.name if tenant else None,
+    }, 200
 
 
 @auth_bp.post("/logout")
