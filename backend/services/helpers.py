@@ -3,9 +3,33 @@ Shared helper utilities used across route files.
 Created to help eliminate duplication
 """
 
+import os
 from datetime import date
 from flask import request, g
 from models import Patient, User
+
+# Hosts that indicate local development — fall back to DEV_TENANT_SLUG env var
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "backend"}
+
+
+def get_slug_from_host() -> str | None:
+    """
+    Extracts the tenant slug from the Host header.
+
+    Production:   sunrise-detox.aeglero.com  →  "sunrise-detox"
+    Local/Docker: localhost / 127.0.0.1      →  DEV_TENANT_SLUG env var
+    """
+    host = request.headers.get("Host", "").split(":")[0]  # strip port
+
+    if host in _LOCAL_HOSTS:
+        return os.getenv("DEV_TENANT_SLUG") or None
+
+    parts = host.split(".")
+    if len(parts) >= 3:
+        return parts[0]
+
+    # Catch-all: any unrecognised host pattern also falls back to env var
+    return os.getenv("DEV_TENANT_SLUG") or None
 
 
 def client_ip() -> str:

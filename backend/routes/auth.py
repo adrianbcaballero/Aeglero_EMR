@@ -9,7 +9,7 @@ import config
 from models import User, UserSession, Tenant
 from services.audit_logger import log_access
 from services.rate_limiter import login_limiter
-from services.helpers import client_ip
+from services.helpers import client_ip, get_slug_from_host
 from auth_middleware import _get_session_id, _validate_session
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -20,9 +20,9 @@ def login():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
-    tenant_slug = data.get("tenant_slug")
     ip = client_ip()
 
+    tenant_slug = get_slug_from_host()
     tenant = Tenant.query.filter_by(slug=tenant_slug, status="active").first()
     if not tenant:
         return {"error": "invalid clinic URL"}, 400

@@ -13,9 +13,9 @@ import { Label } from "@/components/ui/label"
 export type UserRole = "psychiatrist" | "technician" | "admin"
 
 const demoAccounts: { username: string; password: string; role: UserRole; label: string }[] = [
-  { username: "psychiatrist1", password: "password123!", role: "psychiatrist", label: "Psychiatrist" },
-  { username: "technician1", password: "password123!", role: "technician", label: "Technician" },
-  { username: "admin1", password: "password123!", role: "admin", label: "Admin" },
+  { username: "psychiatrist1", password: "Password123!", role: "psychiatrist", label: "Psychiatrist" },
+  { username: "technician1",   password: "Password123!", role: "technician",   label: "Technician" },
+  { username: "admin1",        password: "Password123!", role: "admin",        label: "Admin" },
 ]
 
 interface LoginPageProps {
@@ -28,29 +28,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [notesExpanded, setNotesExpanded] = useState(false)
-
   const [backendOk, setBackendOk] = useState<boolean | null>(null)
 
   useEffect(() => {
     let cancelled = false
-
     getHealth()
-      .then(() => {
-        if (!cancelled) setBackendOk(true)
-      })
-      .catch(() => {
-        if (!cancelled) setBackendOk(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
+      .then(() => { if (!cancelled) setBackendOk(true) })
+      .catch(() => { if (!cancelled) setBackendOk(false) })
+    return () => { cancelled = true }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!username.trim() || !password) {
-      setError("Username and password required")
+      setError("Username and password are required")
       return
     }
 
@@ -70,7 +61,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   return (
     <div className="relative flex min-h-screen bg-background">
-      {/* Presentation Notes - Collapsible popup top-left, default minimized */}
+      {/* Demo accounts panel — top-left, collapsed by default */}
       <div className="fixed top-4 left-4 z-50 w-72">
         <div className="rounded-lg border border-border bg-card shadow-lg overflow-hidden">
           <button
@@ -78,14 +69,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             onClick={() => setNotesExpanded(!notesExpanded)}
             className="flex items-center justify-between w-full p-3 bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer"
           >
-            <span className="text-xs font-semibold text-foreground tracking-wide">
-              Demo Sign Ins
-            </span>
-            {notesExpanded ? (
-              <ChevronUp className="size-3.5 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="size-3.5 text-muted-foreground" />
-            )}
+            <span className="text-xs font-semibold text-foreground tracking-wide">Demo Sign Ins</span>
+            {notesExpanded
+              ? <ChevronUp className="size-3.5 text-muted-foreground" />
+              : <ChevronDown className="size-3.5 text-muted-foreground" />}
           </button>
 
           {notesExpanded && (
@@ -103,9 +90,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 >
                   <div>
                     <p className="text-sm font-medium text-foreground">{account.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {account.username} / {account.password}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{account.username} / {account.password}</p>
                   </div>
                 </button>
               ))}
@@ -114,7 +99,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </div>
       </div>
 
-      {/* Main login form centered */}
+      {/* Main login form */}
       <div className="flex flex-1 flex-col items-center justify-center px-4">
         <div className="flex items-center gap-3 mb-8">
           <div className="flex items-center justify-center size-10 rounded-lg bg-primary text-primary-foreground">
@@ -126,17 +111,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         </div>
 
-        {/* Backend status badge */}
         <div className="mb-3 flex items-center justify-center">
           <div className="text-xs px-2 py-1 rounded-md border border-border bg-card">
             Backend:{" "}
-            {backendOk === null ? (
-              <span className="text-muted-foreground">checking…</span>
-            ) : backendOk ? (
-              <span className="font-medium">connected</span>
-            ) : (
-              <span className="font-medium">disconnected</span>
-            )}
+            {backendOk === null
+              ? <span className="text-muted-foreground">checking…</span>
+              : backendOk
+                ? <span className="font-medium">connected</span>
+                : <span className="font-medium">disconnected</span>}
           </div>
         </div>
 
@@ -149,36 +131,26 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <CardContent>
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="username" className="text-sm font-medium text-foreground">
-                  Username
-                </Label>
+                <Label htmlFor="username" className="text-sm font-medium text-foreground">Username</Label>
                 <Input
                   id="username"
                   type="text"
                   placeholder="Enter your username"
                   value={username}
-                  onChange={(e) => {
-                    setUsername(e.target.value)
-                    setError("")
-                  }}
+                  onChange={(e) => { setUsername(e.target.value); setError("") }}
                   className="h-10"
                   disabled={loading}
                 />
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="password" className="text-sm font-medium text-foreground">
-                  Password
-                </Label>
+                <Label htmlFor="password" className="text-sm font-medium text-foreground">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   placeholder="Enter your password"
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value)
-                    setError("")
-                  }}
+                  onChange={(e) => { setPassword(e.target.value); setError("") }}
                   className="h-10"
                   disabled={loading}
                 />
