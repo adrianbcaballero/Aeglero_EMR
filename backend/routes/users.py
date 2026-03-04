@@ -192,9 +192,11 @@ def create_user():
         log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description="User creation failed — username must be at least 3 characters")
         return {"error": "username must be at least 3 characters"}, 400
 
-    if not password or len(password) < 8:
-        log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — password too short for '{username}'")
-        return {"error": "password must be at least 8 characters"}, 400
+    from services.password_validator import validate_password
+    is_valid, error_msg = validate_password(password)
+    if not is_valid:
+        log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — {error_msg} for '{username}'")
+        return {"error": error_msg}, 400
 
     if role not in {"admin", "psychiatrist", "technician"}:
         log_access(g.user.id, "USER_CREATE", "users", "FAILED", ip, description=f"User creation failed — invalid role '{role}'")
