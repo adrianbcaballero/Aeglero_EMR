@@ -2,6 +2,7 @@ from flask import Flask, g
 from flask_cors import CORS
 import config
 from extensions import db, migrate
+from services.config_validator import validate_config
 
 
 def create_app():
@@ -56,9 +57,12 @@ def create_app():
         response.headers["Pragma"] = "no-cache" # HTTP 1.0 backward compatibility for no-cache
         return response
 
+    validate_config(app)
+
     @app.get("/health")
     def health():
         return {"ok": True}
+    
     
     @app.get("/api/protected/ping")
     @require_auth()
