@@ -6,7 +6,7 @@ from werkzeug.security import check_password_hash
 
 from extensions import db
 import config
-from models import User, UserSession
+from models import User, UserSession, Tenant
 from services.audit_logger import log_access
 from services.rate_limiter import login_limiter
 from services.helpers import client_ip
@@ -17,76 +17,66 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 @auth_bp.post("/login")
 def login():
-    """
-    Body: {username, password}
-    Returns: {user_id, username, role, session_id}
-    """
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
+    tenant_slug = data.get("tenant_slug")
     ip = client_ip()
 
+    tenant = Tenant.query.filter_by(slug=tenant_slug, status="active").first()
+    if not tenant:
+        return {"error": "invalid clinic URL"}, 400
+        
+    t_id = tenant.id
+
     if login_limiter.is_rate_limited(ip):
-        log_access(None, "LOGIN", "auth", "FAILED", ip, description=f"Rate limited login attempt for '{username}'")
-        remaining = login_limiter.remaining(ip)
-        return {
-            "error": "Too many login attempts. Please wait 60 seconds.",
-            "retry_after": 60,
-        }, 429
+        log_access(None, "LOGIN", "auth", "FAILED", ip, description=f"Rate limited login attempt for '{username}'", tenant_id=t_id)
+        return {"error": "Too many login attempts. Please wait 60 seconds.", "retry_after": 60}, 429
 
     if not username or not password:
-        log_access(None, "LOGIN", "auth", "FAILED", ip, description="Login failed — missing username or password")
+        log_access(None, "LOGIN", "auth", "FAILED", ip, description="Login failed — missing username or password", tenant_id=t_id)
         return {"error": "username and password required"}, 400
 
-    user = User.query.filter_by(username=username).first()
+    user = User.query.filter_by(username=username, tenant_id=t_id).first()
 
-    #IF username doesnt exist 
     if not user:
-        log_access(None, "LOGIN", "auth", "FAILED", ip, description=f"Login failed — username '{username}' not found")
+        log_access(None, "LOGIN", "auth", "FAILED", ip, description=f"Login failed — username '{username}' not found", tenant_id=t_id)
         return {"error": "invalid credentials"}, 401
 
-    # Check permanent lock
     if user.permanently_locked:
-        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login blocked — '{user.username}' is permanently locked")
+        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login blocked — '{user.username}' is permanently locked", tenant_id=t_id)
         return {"error": "account is permanently locked. contact an administrator"}, 403
 
-    # Check temporary lockout
     if user.locked_until and user.locked_until > datetime.now(timezone.utc):
-        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login blocked — '{user.username}' temporarily locked")
+        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login blocked — '{user.username}' temporarily locked", tenant_id=t_id)
         return {"error": "account locked. try again later"}, 403
 
-    # Verify password
     if not check_password_hash(user.password_hash, password):
         user.failed_login_attempts += 1
-
-        # Lock if too many failed attempts
         if user.failed_login_attempts >= config.MAX_FAILED_LOGINS:
             user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=config.ACCOUNT_LOCKOUT_MINUTES)
-
         db.session.commit()
-        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login failed — wrong password for '{user.username}' (attempt #{user.failed_login_attempts})")
+        log_access(user.id, "LOGIN", "auth", "FAILED", ip, description=f"Login failed — wrong password for '{user.username}'", tenant_id=t_id)
         return {"error": "invalid credentials"}, 401
 
-    # Success: reset lock counters
     user.failed_login_attempts = 0
     user.locked_until = None
     db.session.commit()
 
-    # Create session
     session_id = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
 
-    sess = UserSession(session_id=session_id, user_id=user.id, tenant_id=user.tenant_id, expires_at=expires_at)
+    sess = UserSession(session_id=session_id, user_id=user.id, tenant_id=t_id, expires_at=expires_at)
     db.session.add(sess)
     db.session.commit()
 
-    log_access(user.id, "LOGIN", "auth", "SUCCESS", ip, description=f"User '{user.username}' ({user.role}) logged in")
+    log_access(user.id, "LOGIN", "auth", "SUCCESS", ip, description=f"User '{user.username}' ({user.role}) logged in", tenant_id=t_id)
 
     return {
         "user_id": user.id,
         "username": user.username,
         "role": user.role,
-        "tenant_id": user.tenant_id,
+        "tenant_id": t_id,
         "session_id": session_id,
     }, 200
 
